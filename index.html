@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SEO & Web Growth Suite — Tesla Mechanical Designs</title>
-    <meta name="description" content="Precision engineering SEO tools suite: Meta Tag Scraper, Google Image Sitemap Generator, Deep Image & Page Auditor, Backlink Finder, Schema.org Generator, and Shorts Hunter.">
+    <meta name="description" content="Precision engineering SEO tools suite: Meta Tag Scraper, Google Image Sitemap Generator, Deep Image & Page Auditor, Backlink Finder, Schema.org Generator, Shorts Hunter, and Universal Video Downloader.">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
     <link rel="stylesheet" href="style.css">
 </head>
@@ -12,7 +12,7 @@
 
     <main class="app-container">
         <!-- ======================================================== -->
-        <!-- TOP BRAND HEADER (TESLA MECHANICAL DESIGNS) -->
+        <!-- TOP BRAND HEADER (CLEAN WHITE ON GRAPHITE NAVY) -->
         <!-- ======================================================== -->
         <header class="top-brand-header">
             <div class="brand-logo-lockup">
@@ -40,7 +40,8 @@
                 <button class="tab-btn" data-tab="audit">🔍 SEO & Image Audit</button>
                 <button class="tab-btn" data-tab="backlinks">🔗 Backlink Finder</button>
                 <button class="tab-btn" data-tab="schema">📄 Schema Generator</button>
-                <button class="tab-btn" data-tab="shorts">🎬 Shorts Hunter</button>
+                <button class="tab-btn" data-tab="shorts">🔥 Shorts Hunter</button>
+                <button class="tab-btn" data-tab="video">🎬 Video Downloader</button>
             </div>
         </nav>
 
@@ -100,11 +101,11 @@
                 </div>
 
                 <div class="input-row" style="margin-top: 10px; gap: 24px; align-items: center;">
-                    <label style="font-size: 13px; font-family: var(--font-mono); color: var(--brand-sky); display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <label style="font-size: 13px; font-family: var(--font-mono); color: var(--text-navy); display: flex; align-items: center; gap: 8px; cursor: pointer;">
                         <input type="checkbox" id="sitemap-webp-only" style="width: auto; cursor: pointer;">
                         <span>Only include .webp format images</span>
                     </label>
-                    <label style="font-size: 13px; font-family: var(--font-mono); color: var(--brand-sky); display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <label style="font-size: 13px; font-family: var(--font-mono); color: var(--text-navy); display: flex; align-items: center; gap: 8px; cursor: pointer;">
                         <input type="checkbox" id="sitemap-exclude-common" checked style="width: auto; cursor: pointer;">
                         <span>Exclude common logos/headers (>50% recurrence)</span>
                     </label>
@@ -200,7 +201,7 @@
                 <!-- Sub View Switcher (Image Audit vs Anchor Links Audit) -->
                 <div class="results-header" style="margin-top: 24px;">
                     <div class="button-group">
-                        <button id="view-images-btn" class="btn secondary" style="background:var(--brand-navy-core); border-color:var(--brand-ice-blue);">🖼️ Image Audit (<span id="audit-img-count">0</span>)</button>
+                        <button id="view-images-btn" class="btn secondary" style="background:var(--bg-subtle); border-color:var(--brand-cobalt); color:var(--brand-cobalt); font-weight:700;">🖼️ Image Audit (<span id="audit-img-count">0</span>)</button>
                         <button id="view-anchors-btn" class="btn secondary">🔗 Anchor Links Audit (<span id="audit-link-count">0</span>)</button>
                     </div>
                     <!-- Excel Download Button -->
@@ -384,7 +385,7 @@
                 </div>
 
                 <div class="button-group">
-                    <button id="shorts-btn" class="btn primary">🎬 Hunt Shorts</button>
+                    <button id="shorts-btn" class="btn primary">🔥 Hunt Shorts</button>
                     <button id="shorts-clear-btn" class="btn secondary">Clear</button>
                 </div>
                 <div id="shorts-status" class="status-text hidden"></div>
@@ -410,6 +411,45 @@
                         </thead>
                         <tbody id="shorts-table-body"></tbody>
                     </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- 7. TAB: UNIVERSAL VIDEO DOWNLOADER (FROM UNIVERSAL_DOWNLOADER.PY) -->
+        <!-- ======================================================== -->
+        <section id="panel-video" class="tool-panel hidden">
+            <div class="tool-header">
+                <div class="badge-discipline">Universal Media Engine</div>
+                <h1>Universal <span>Video Downloader</span></h1>
+                <p class="tool-subtitle">// Download & inspect videos from YouTube, Instagram Reels, TikTok, Twitter/X, and 1000+ sites</p>
+            </div>
+
+            <div class="card">
+                <div class="meta-label">Video or Reel URL</div>
+                <div class="input-row">
+                    <input type="text" id="video-url-input" placeholder="https://www.youtube.com/watch?v=... or https://www.instagram.com/reel/..." style="flex: 1;" />
+                    <button id="video-fetch-btn" class="btn primary">🎬 Fetch Video Info</button>
+                </div>
+                <div id="video-status" class="status-text hidden"></div>
+            </div>
+
+            <div id="video-results-container" class="hidden">
+                <div class="video-preview-card">
+                    <img id="video-thumb-img" src="" alt="Thumbnail" class="video-thumb">
+                    <div class="video-meta-col">
+                        <h2 id="video-title" style="font-size: 18px; font-weight: 700; color: var(--text-navy-deep); margin-bottom: 8px;"></h2>
+                        <div style="font-family: var(--font-mono); font-size: 13px; color: var(--text-muted); line-height: 1.8;">
+                            <div><strong>Creator / Channel:</strong> <span id="video-channel"></span></div>
+                            <div><strong>Duration:</strong> <span id="video-duration"></span></div>
+                            <div><strong>Source:</strong> <a id="video-source-link" href="" target="_blank" style="color: var(--brand-cobalt);">Open Original ↗</a></div>
+                        </div>
+
+                        <div style="margin-top: 16px;">
+                            <div class="meta-label">Available Stream Formats</div>
+                            <div id="video-formats-list" class="button-group" style="margin-top: 6px;"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>

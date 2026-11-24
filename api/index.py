@@ -914,5 +914,69 @@ def api_shorts_hunter():
     })
 
 
+# -------------------------------------------------------------
+# 7. TOOL: UNIVERSAL VIDEO DOWNLOADER (FROM UNIVERSAL_DOWNLOADER.PY)
+# -------------------------------------------------------------
+@app.route("/api/video-downloader", methods=["POST"])
+def api_video_downloader():
+    data = request.get_json(silent=True) or {}
+    url = data.get("url", "").strip()
+    if not url:
+        return jsonify({"error": "Video URL is required"}), 400
+
+    if yt_dlp is None:
+        return jsonify({"error": "yt-dlp engine is not available"}), 500
+
+    try:
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'skip_download': True,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            title = info.get("title", "Untitled Video")
+            thumbnail = info.get("thumbnail", "")
+            duration = info.get("duration", 0)
+            uploader = info.get("uploader", info.get("channel", "Unknown Channel"))
+
+            mins = int(duration // 60) if duration else 0
+            secs = int(duration % 60) if duration else 0
+            duration_str = f"{mins}:{secs:02d}" if duration else "N/A"
+
+            formats = []
+            direct_video_url = None
+            if "formats" in info:
+                for f in info["formats"]:
+                    ext = f.get("ext", "mp4")
+                    height = f.get("height")
+                    f_url = f.get("url")
+                    if f_url and ext in ["mp4", "webm"]:
+                        if height and height >= 360:
+                            formats.append({
+                                "resolution": f"{height}p",
+                                "ext": ext,
+                                "url": f_url
+                            })
+                            if not direct_video_url or height == 720:
+                                direct_video_url = f_url
+
+            if not direct_video_url:
+                direct_video_url = info.get("url", "")
+
+            return jsonify({
+                "title": title,
+                "thumbnail": thumbnail,
+                "duration": duration_str,
+                "uploader": uploader,
+                "source_url": url,
+                "download_url": direct_video_url,
+                "formats": formats[:6]
+            })
+    except Exception as e:
+        return jsonify({"error": f"Failed to extract video: {str(e)}"}), 500
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
+

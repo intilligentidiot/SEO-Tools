@@ -597,3 +597,70 @@ document.getElementById("shorts-clear-btn")?.addEventListener("click", () => {
     document.getElementById("shorts-results-container").classList.add("hidden");
     hideStatus("shorts-status");
 });
+
+
+// ========================================================
+// 7. TOOL: UNIVERSAL VIDEO DOWNLOADER (FROM UNIVERSAL_DOWNLOADER.PY)
+// ========================================================
+document.getElementById("video-fetch-btn")?.addEventListener("click", async () => {
+    const url = document.getElementById("video-url-input").value.trim();
+    if (!url) return alert("Please enter a video URL (YouTube, Instagram Reel, etc.)");
+
+    const btn = document.getElementById("video-fetch-btn");
+    btn.disabled = true;
+    showStatus("video-status", "Extracting video metadata and direct media streams...", true);
+    document.getElementById("video-results-container").classList.add("hidden");
+
+    try {
+        const resp = await fetch(`${API_BASE}/api/video-downloader`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url })
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        const data = await resp.json();
+
+        document.getElementById("video-title").textContent = data.title;
+        document.getElementById("video-channel").textContent = data.uploader;
+        document.getElementById("video-duration").textContent = data.duration;
+        document.getElementById("video-thumb-img").src = data.thumbnail || "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='140'><rect fill='%23e2e8f0' width='240' height='140'/><text fill='%2364748b' x='50%' y='50%' dominant-baseline='middle' text-anchor='middle'>No Thumbnail</text></svg>";
+        
+        const srcLink = document.getElementById("video-source-link");
+        srcLink.href = data.source_url;
+
+        const formatsList = document.getElementById("video-formats-list");
+        formatsList.innerHTML = "";
+
+        if (data.formats && data.formats.length > 0) {
+            data.formats.forEach(fmt => {
+                const link = document.createElement("a");
+                link.href = fmt.url;
+                link.target = "_blank";
+                link.className = "btn download";
+                link.style.padding = "6px 14px";
+                link.style.fontSize = "12px";
+                link.textContent = `↓ Download ${fmt.resolution} (${fmt.ext.toUpperCase()})`;
+                formatsList.appendChild(link);
+            });
+        } else if (data.download_url) {
+            const link = document.createElement("a");
+            link.href = data.download_url;
+            link.target = "_blank";
+            link.className = "btn download";
+            link.style.padding = "6px 14px";
+            link.style.fontSize = "12px";
+            link.textContent = "↓ Direct Stream Link ↗";
+            formatsList.appendChild(link);
+        } else {
+            formatsList.innerHTML = `<span style="font-size:12px; color:var(--text-muted);">Direct download unavailable for this stream type. Click 'Open Original' above.</span>`;
+        }
+
+        document.getElementById("video-results-container").classList.remove("hidden");
+        hideStatus("video-status");
+    } catch (err) {
+        showStatus("video-status", `Error: ${err.message}`);
+    } finally {
+        btn.disabled = false;
+    }
+});
+
