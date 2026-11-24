@@ -3,20 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SEO & Web Tools Suite — All-in-One Growth Platform</title>
-    <meta name="description" content="All-in-one free SEO & Web tools platform: Meta Scraper, XML Image Sitemap Generator, Deep Image & SEO Auditor, Backlink Finder, Schema.org Generator, and YouTube Shorts Hunter.">
+    <title>SEO & Web Growth Suite — Tesla Mechanical Designs</title>
+    <meta name="description" content="Precision engineering SEO tools suite: Meta Tag Scraper, Google Image Sitemap Generator, Deep Image & Page Auditor, Backlink Finder, Schema.org Generator, and Shorts Hunter.">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
     <main class="app-container">
-        <!-- Unified Top Navigation Bar -->
-        <nav class="suite-nav-container">
-            <div class="suite-logo">
-                ⚡ SEO<span>Suite</span>
-                <span class="suite-logo-badge">PRO FREE</span>
+        <!-- ======================================================== -->
+        <!-- TOP BRAND HEADER (TESLA MECHANICAL DESIGNS) -->
+        <!-- ======================================================== -->
+        <header class="top-brand-header">
+            <div class="brand-logo-lockup">
+                <img src="tesla-logo.svg" alt="Tesla Mechanical Designs" class="brand-logo-img">
+                <div class="brand-suite-tag">
+                    <span class="brand-suite-title">SEO & Growth Engine</span>
+                    <span class="brand-badge-pro">PRO SUITE</span>
+                </div>
             </div>
+            <div class="header-meta-actions">
+                <div class="system-status">
+                    <span class="system-status-dot"></span>
+                    <span>All Systems Operational</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- ======================================================== -->
+        <!-- HORIZONTAL TOOL NAVIGATION TABS -->
+        <!-- ======================================================== -->
+        <nav class="nav-tabs-wrapper">
             <div class="nav-tabs">
                 <button class="tab-btn active" data-tab="meta">⚡ Meta Scraper</button>
                 <button class="tab-btn" data-tab="sitemap">🗺️ Image Sitemap</button>
@@ -31,29 +48,29 @@
         <!-- 1. TAB: META TAG SCRAPER -->
         <!-- ======================================================== -->
         <section id="panel-meta" class="tool-panel">
-            <header class="tool-header">
-                <div class="badge">● Meta Scraper & Analyzer</div>
-                <h1>Extract <span>Meta Tags</span><br/>from any URL</h1>
-                <p class="tool-subtitle">// paste URLs → analyze titles & descriptions → export Excel (.xlsx)</p>
-            </header>
+            <div class="tool-header">
+                <div class="badge-discipline">Precision Meta Tag Scraper</div>
+                <h1>Extract & Analyze <span>Meta Tags</span></h1>
+                <p class="tool-subtitle">// Batch scan URLs → verify character lengths → export formatted Excel (.xlsx)</p>
+            </div>
 
             <div class="card">
                 <div class="meta-label">
                     <span>URLs to scan (one per line)</span>
                     <span id="meta-url-count">0 URLs</span>
                 </div>
-                <textarea id="meta-url-input" placeholder="https://example.com&#10;https://another.com"></textarea>
+                <textarea id="meta-url-input" placeholder="https://www.teslamechanicaldesigns.com&#10;https://www.teslamechanicaldesigns.com/3d-modeling-services.php"></textarea>
                 
                 <div class="button-group">
-                    <button id="meta-scan-btn" class="btn primary">⚡ Scan All</button>
-                    <button id="meta-clear-btn" class="btn secondary">Clear</button>
+                    <button id="meta-scan-btn" class="btn primary">⚡ Scan All URLs</button>
+                    <button id="meta-clear-btn" class="btn secondary">Clear Input</button>
                 </div>
                 <div id="meta-status" class="status-text hidden"></div>
             </div>
 
             <div id="meta-results-container" class="hidden">
                 <div class="results-header">
-                    <div id="meta-results-title" class="results-title">Results — 0 pages</div>
+                    <div id="meta-results-title" class="results-title">Scanned 0 Pages</div>
                     <button id="meta-export-btn" class="btn download">↓ Export Excel (.xlsx)</button>
                 </div>
                 <div id="meta-results-list"></div>
@@ -64,17 +81,17 @@
         <!-- 2. TAB: IMAGE SITEMAP GENERATOR -->
         <!-- ======================================================== -->
         <section id="panel-sitemap" class="tool-panel hidden">
-            <header class="tool-header">
-                <div class="badge">● Google Image Sitemap Crawler</div>
-                <h1>Generate <span>Image Sitemap</span><br/>for your website</h1>
-                <p class="tool-subtitle">// crawl internal pages → find WebP, images & alt text → export XML & CSV</p>
-            </header>
+            <div class="tool-header">
+                <div class="badge-discipline">Google Image Sitemap Crawler</div>
+                <h1>Generate <span>Image Sitemap</span></h1>
+                <p class="tool-subtitle">// Crawl internal pages → extract WebP, images & alt text → export XML & CSV</p>
+            </div>
 
             <div class="card">
                 <div class="input-row">
-                    <div class="input-col" style="flex: 2;">
-                        <div class="meta-label">Starting Website URL</div>
-                        <input type="text" id="sitemap-url-input" placeholder="https://example.com" />
+                    <div class="input-col" style="flex: 2.5;">
+                        <div class="meta-label">Starting Domain or Page URL</div>
+                        <input type="text" id="sitemap-url-input" placeholder="https://www.teslamechanicaldesigns.com" />
                     </div>
                     <div class="input-col" style="flex: 1;">
                         <div class="meta-label">Max Pages to Crawl</div>
@@ -82,7 +99,7 @@
                     </div>
                 </div>
                 <div class="button-group">
-                    <button id="sitemap-crawl-btn" class="btn primary">🗺️ Start Crawl</button>
+                    <button id="sitemap-crawl-btn" class="btn primary">🗺️ Start Sitemap Crawl</button>
                     <button id="sitemap-clear-btn" class="btn secondary">Clear</button>
                 </div>
                 <div id="sitemap-status" class="status-text hidden"></div>
@@ -90,10 +107,10 @@
 
             <div id="sitemap-results-container" class="hidden">
                 <div class="results-header">
-                    <div id="sitemap-results-title" class="results-title">Found 0 images across 0 pages</div>
+                    <div id="sitemap-results-title" class="results-title">Discovered 0 images</div>
                     <div class="button-group">
                         <button id="sitemap-copy-xml-btn" class="btn secondary">Copy XML</button>
-                        <button id="sitemap-download-xml-btn" class="btn download">↓ Download sitemap.xml</button>
+                        <button id="sitemap-download-xml-btn" class="btn download">↓ Download XML</button>
                         <button id="sitemap-download-csv-btn" class="btn download">↓ Download CSV</button>
                     </div>
                 </div>
@@ -121,17 +138,17 @@
         <!-- 3. TAB: DEEP SEO & IMAGE AUDITOR -->
         <!-- ======================================================== -->
         <section id="panel-audit" class="tool-panel hidden">
-            <header class="tool-header">
-                <div class="badge">● Deep Page & Image Auditor</div>
-                <h1>Perform <span>SEO Audit</span><br/>on any page</h1>
-                <p class="tool-subtitle">// check alt tags, missing dimensions (CLS), formats & anchor tags</p>
-            </header>
+            <div class="tool-header">
+                <div class="badge-discipline">Core Diagnostics & Performance</div>
+                <h1>Perform <span>Deep SEO Audit</span></h1>
+                <p class="tool-subtitle">// Alt tags, missing width/height attributes (CLS), format efficiency, and anchor links</p>
+            </div>
 
             <div class="card">
                 <div class="meta-label">Page URL to Audit</div>
                 <div class="input-row">
-                    <input type="text" id="audit-url-input" placeholder="https://example.com/page" style="flex: 1;" />
-                    <button id="audit-btn" class="btn primary">🔍 Run Deep Audit</button>
+                    <input type="text" id="audit-url-input" placeholder="https://www.teslamechanicaldesigns.com" style="flex: 1;" />
+                    <button id="audit-btn" class="btn primary">🔍 Run Diagnostics</button>
                 </div>
                 <div id="audit-status" class="status-text hidden"></div>
             </div>
@@ -152,23 +169,23 @@
                         <div id="audit-missing-alt" class="stat-value warn">0</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">Missing Width/Height</div>
+                        <div class="stat-label">Missing Dimensions (CLS)</div>
                         <div id="audit-missing-dims" class="stat-value bad">0</div>
                     </div>
                 </div>
 
                 <div class="card">
-                    <div class="meta-label">Page Headings & Meta Structure</div>
-                    <div style="font-family: var(--font-mono); font-size: 13px; line-height: 1.6;">
+                    <div class="meta-label">Meta & Structural Integrity</div>
+                    <div style="font-family: var(--font-mono); font-size: 13px; line-height: 1.8;">
                         <div><strong>Title:</strong> <span id="audit-title"></span> <span id="audit-title-pill"></span></div>
                         <div style="margin-top: 6px;"><strong>Description:</strong> <span id="audit-desc"></span> <span id="audit-desc-pill"></span></div>
-                        <div style="margin-top: 6px;"><strong>H1 Tags:</strong> <span id="audit-h1"></span></div>
+                        <div style="margin-top: 6px;"><strong>H1 Tag:</strong> <span id="audit-h1"></span></div>
                         <div style="margin-top: 6px;"><strong>Canonical:</strong> <span id="audit-canonical"></span></div>
                     </div>
                 </div>
 
                 <div class="results-header">
-                    <div class="results-title">Image-by-Image Inspection</div>
+                    <div class="results-title">Image-by-Image Diagnostic Inspection</div>
                 </div>
                 <div class="table-container">
                     <table>
@@ -192,17 +209,17 @@
         <!-- 4. TAB: BACKLINK OPPORTUNITY FINDER -->
         <!-- ======================================================== -->
         <section id="panel-backlinks" class="tool-panel hidden">
-            <header class="tool-header">
-                <div class="badge">● Backlink Opportunity Finder</div>
-                <h1>Discover <span>Free Backlinks</span><br/>in your industry</h1>
-                <p class="tool-subtitle">// targeted footprint generator & live search query generator</p>
-            </header>
+            <div class="tool-header">
+                <div class="badge-discipline">Authority & Outreach Engine</div>
+                <h1>Discover <span>Backlink Opportunities</span></h1>
+                <p class="tool-subtitle">// Targeted search footprint matrix & live query generators for high-intent links</p>
+            </div>
 
             <div class="card">
                 <div class="input-row">
                     <div class="input-col" style="flex: 2;">
-                        <div class="meta-label">Primary Keyword</div>
-                        <input type="text" id="backlink-kw" placeholder="e.g. sheet metal design, mechanical engineering, dental" />
+                        <div class="meta-label">Target Industry / Keyword</div>
+                        <input type="text" id="backlink-kw" placeholder="e.g. sheet metal design, mechanical engineering, CAD" />
                     </div>
                     <div class="input-col" style="flex: 1.5;">
                         <div class="meta-label">Category</div>
@@ -210,8 +227,8 @@
                             <option value="guest_blogs">Guest Blogs ("Write for Us")</option>
                             <option value="business_listings">Business Listings & Directories</option>
                             <option value="classifieds">Free Classifieds</option>
-                            <option value="pdf_sharing">PPT / PDF Sharing Sites</option>
-                            <option value="communities">Forums & Communities</option>
+                            <option value="pdf_sharing">PPT / PDF Document Sharing</option>
+                            <option value="communities">Engineering Forums & Communities</option>
                         </select>
                     </div>
                     <div class="input-col" style="flex: 1;">
@@ -219,8 +236,8 @@
                         <select id="backlink-country">
                             <option value="">Global (No Filter)</option>
                             <option value="USA">USA</option>
-                            <option value="India">India</option>
                             <option value="UK">UK</option>
+                            <option value="India">India</option>
                             <option value="Canada">Canada</option>
                             <option value="Australia">Australia</option>
                         </select>
@@ -228,7 +245,7 @@
                 </div>
 
                 <div class="button-group">
-                    <button id="backlink-btn" class="btn primary">🔗 Find Opportunities</button>
+                    <button id="backlink-btn" class="btn primary">🔗 Generate Footprints</button>
                     <button id="backlink-clear-btn" class="btn secondary">Clear</button>
                 </div>
                 <div id="backlink-status" class="status-text hidden"></div>
@@ -236,7 +253,7 @@
 
             <div id="backlink-results-container" class="hidden">
                 <div class="results-header">
-                    <div class="results-title">Generated Search Footprints</div>
+                    <div class="results-title">Generated Search Footprints (Click to Query)</div>
                 </div>
                 <div id="backlink-footprints-list"></div>
 
@@ -251,55 +268,55 @@
         <!-- 5. TAB: SCHEMA & JSON-LD GENERATOR -->
         <!-- ======================================================== -->
         <section id="panel-schema" class="tool-panel hidden">
-            <header class="tool-header">
-                <div class="badge">● Schema.org & JSON-LD Generator</div>
-                <h1>Generate <span>Structured Data</span><br/>for Google Rich Snippets</h1>
-                <p class="tool-subtitle">// create Article, WebPage, and FAQ rich snippets for maximum SERP visibility</p>
-            </header>
+            <div class="tool-header">
+                <div class="badge-discipline">Structured Data & SERP Rich Snippets</div>
+                <h1>Generate <span>Schema.org JSON-LD</span></h1>
+                <p class="tool-subtitle">// Create validated Article and WebPage structured markup for enhanced Google SERP visibility</p>
+            </div>
 
             <div class="card">
                 <div class="input-row">
                     <div class="input-col" style="flex: 1;">
                         <div class="meta-label">Schema Type</div>
                         <select id="schema-type">
-                            <option value="Article">Article / Blog Post</option>
-                            <option value="WebPage">WebPage</option>
+                            <option value="Article">Article / Technical Publication</option>
+                            <option value="WebPage">Standard WebPage</option>
                         </select>
                     </div>
                     <div class="input-col" style="flex: 2;">
                         <div class="meta-label">Headline / Title</div>
-                        <input type="text" id="schema-headline" placeholder="e.g. Complete Guide to Precision Sheet Metal Design" />
+                        <input type="text" id="schema-headline" placeholder="e.g. Precision Sheet Metal Fabrication and Bend Tolerances" />
                     </div>
                 </div>
 
-                <div class="meta-label">Excerpt / Description</div>
-                <textarea id="schema-desc" style="height: 80px;" placeholder="Brief summary of the article or document..."></textarea>
+                <div class="meta-label">Excerpt / Summary Description</div>
+                <textarea id="schema-desc" style="height: 80px;" placeholder="Comprehensive engineering overview of tolerance considerations in sheet metal manufacturing..."></textarea>
 
                 <div class="input-row">
                     <div class="input-col">
                         <div class="meta-label">Author Name</div>
-                        <input type="text" id="schema-author" placeholder="e.g. John Doe / Technical Team" />
+                        <input type="text" id="schema-author" placeholder="Tesla Mechanical Designs" />
                     </div>
                     <div class="input-col">
                         <div class="meta-label">Page Canonical URL</div>
-                        <input type="text" id="schema-page-url" placeholder="https://example.com/guide" />
+                        <input type="text" id="schema-page-url" placeholder="https://www.teslamechanicaldesigns.com/services.php" />
                     </div>
                     <div class="input-col">
                         <div class="meta-label">Feature Image URL</div>
-                        <input type="text" id="schema-image-url" placeholder="https://example.com/cover.webp" />
+                        <input type="text" id="schema-image-url" placeholder="https://www.teslamechanicaldesigns.com/images/hero.webp" />
                     </div>
                 </div>
 
                 <div class="button-group">
-                    <button id="schema-gen-btn" class="btn primary">📄 Generate JSON-LD</button>
-                    <button id="schema-clear-btn" class="btn secondary">Reset</button>
+                    <button id="schema-gen-btn" class="btn primary">📄 Generate JSON-LD Code</button>
+                    <button id="schema-clear-btn" class="btn secondary">Reset Form</button>
                 </div>
             </div>
 
             <div id="schema-results-container" class="hidden">
                 <div class="results-header">
-                    <div class="results-title">Valid Google Rich Snippet JSON-LD</div>
-                    <button id="schema-copy-btn" class="btn download">Copy Code</button>
+                    <div class="results-title">Validated Google JSON-LD Code</div>
+                    <button id="schema-copy-btn" class="btn download">Copy Code to Clipboard</button>
                 </div>
                 <div id="schema-code-preview" class="code-preview"></div>
             </div>
@@ -309,17 +326,17 @@
         <!-- 6. TAB: YOUTUBE SHORTS HUNTER -->
         <!-- ======================================================== -->
         <section id="panel-shorts" class="tool-panel hidden">
-            <header class="tool-header">
-                <div class="badge">● YouTube Shorts Trend Hunter</div>
-                <h1>Find <span>Viral Shorts</span><br/>in any niche</h1>
-                <p class="tool-subtitle">// discover high-view competitor shorts, titles, and engagement rates</p>
-            </header>
+            <div class="tool-header">
+                <div class="badge-discipline">Viral Content Intelligence</div>
+                <h1>Find <span>Trending Shorts</span></h1>
+                <p class="tool-subtitle">// Discover high-performing competitor videos, view metrics, and topics in your sector</p>
+            </div>
 
             <div class="card">
                 <div class="input-row">
                     <div class="input-col" style="flex: 3;">
-                        <div class="meta-label">Topic or Niche Query</div>
-                        <input type="text" id="shorts-query" placeholder="e.g. Mechanical engineering product design, CNC machining" />
+                        <div class="meta-label">Topic or Engineering Sector</div>
+                        <input type="text" id="shorts-query" placeholder="e.g. Mechanical engineering product design, CNC manufacturing" />
                     </div>
                     <div class="input-col" style="flex: 1;">
                         <div class="meta-label">Max Results</div>
