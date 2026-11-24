@@ -84,7 +84,7 @@
             <div class="tool-header">
                 <div class="badge-discipline">Google Image Sitemap Crawler</div>
                 <h1>Generate <span>Image Sitemap</span></h1>
-                <p class="tool-subtitle">// Crawl internal pages → extract WebP, images & alt text → export XML & CSV</p>
+                <p class="tool-subtitle">// Crawl internal pages → extract WebP, images & alt text → export Google XML & CSV</p>
             </div>
 
             <div class="card">
@@ -94,11 +94,23 @@
                         <input type="text" id="sitemap-url-input" placeholder="https://www.teslamechanicaldesigns.com" />
                     </div>
                     <div class="input-col" style="flex: 1;">
-                        <div class="meta-label">Max Pages to Crawl</div>
+                        <div class="meta-label">Max Pages</div>
                         <input type="number" id="sitemap-max-pages" min="1" max="25" value="10" />
                     </div>
                 </div>
-                <div class="button-group">
+
+                <div class="input-row" style="margin-top: 10px; gap: 24px; align-items: center;">
+                    <label style="font-size: 13px; font-family: var(--font-mono); color: var(--brand-sky); display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="sitemap-webp-only" style="width: auto; cursor: pointer;">
+                        <span>Only include .webp format images</span>
+                    </label>
+                    <label style="font-size: 13px; font-family: var(--font-mono); color: var(--brand-sky); display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="sitemap-exclude-common" checked style="width: auto; cursor: pointer;">
+                        <span>Exclude common logos/headers (>50% recurrence)</span>
+                    </label>
+                </div>
+
+                <div class="button-group" style="margin-top: 16px;">
                     <button id="sitemap-crawl-btn" class="btn primary">🗺️ Start Sitemap Crawl</button>
                     <button id="sitemap-clear-btn" class="btn secondary">Clear</button>
                 </div>
@@ -115,7 +127,7 @@
                     </div>
                 </div>
 
-                <div class="meta-label">Google Image Sitemap (XML Preview)</div>
+                <div class="meta-label">Google Image Sitemap (Standard XML Format)</div>
                 <div id="sitemap-xml-preview" class="code-preview"></div>
 
                 <div class="table-container" style="margin-top: 20px;">
@@ -124,7 +136,8 @@
                             <tr>
                                 <th>Page URL</th>
                                 <th>Image URL</th>
-                                <th>Alt Text / Title</th>
+                                <th>Alt Text</th>
+                                <th>Title</th>
                                 <th>Format</th>
                             </tr>
                         </thead>
@@ -140,8 +153,8 @@
         <section id="panel-audit" class="tool-panel hidden">
             <div class="tool-header">
                 <div class="badge-discipline">Core Diagnostics & Performance</div>
-                <h1>Perform <span>Deep SEO Audit</span></h1>
-                <p class="tool-subtitle">// Alt tags, missing width/height attributes (CLS), format efficiency, and anchor links</p>
+                <h1>Perform <span>Deep SEO & Image Audit</span></h1>
+                <p class="tool-subtitle">// Image alt tags, dimensions (CLS), formats, loading attributes & anchor link title validations</p>
             </div>
 
             <div class="card">
@@ -175,31 +188,57 @@
                 </div>
 
                 <div class="card">
-                    <div class="meta-label">Meta & Structural Integrity</div>
+                    <div class="meta-label">Page Structure & Meta Validation</div>
                     <div style="font-family: var(--font-mono); font-size: 13px; line-height: 1.8;">
-                        <div><strong>Title:</strong> <span id="audit-title"></span> <span id="audit-title-pill"></span></div>
-                        <div style="margin-top: 6px;"><strong>Description:</strong> <span id="audit-desc"></span> <span id="audit-desc-pill"></span></div>
+                        <div><strong>Title Tag:</strong> <span id="audit-title"></span> <span id="audit-title-pill"></span></div>
+                        <div style="margin-top: 6px;"><strong>Meta Description:</strong> <span id="audit-desc"></span> <span id="audit-desc-pill"></span></div>
                         <div style="margin-top: 6px;"><strong>H1 Tag:</strong> <span id="audit-h1"></span></div>
                         <div style="margin-top: 6px;"><strong>Canonical:</strong> <span id="audit-canonical"></span></div>
                     </div>
                 </div>
 
-                <div class="results-header">
-                    <div class="results-title">Image-by-Image Diagnostic Inspection</div>
+                <!-- Sub View Switcher (Image Audit vs Anchor Links Audit) -->
+                <div class="results-header" style="margin-top: 24px;">
+                    <div class="button-group">
+                        <button id="view-images-btn" class="btn secondary" style="background:var(--brand-navy-core); border-color:var(--brand-ice-blue);">🖼️ Image Audit (<span id="audit-img-count">0</span>)</button>
+                        <button id="view-anchors-btn" class="btn secondary">🔗 Anchor Links Audit (<span id="audit-link-count">0</span>)</button>
+                    </div>
+                    <!-- Excel Download Button -->
+                    <button id="audit-export-btn" class="btn download">↓ Export Detailed Audit (.xlsx)</button>
                 </div>
-                <div class="table-container">
+
+                <!-- 1. Table for Images -->
+                <div id="audit-images-section" class="table-container">
                     <table>
                         <thead>
                             <tr>
                                 <th>#</th>
                                 <th>Image URL</th>
                                 <th>Alt Text</th>
+                                <th>Title Tag</th>
                                 <th>Dimensions</th>
                                 <th>Format</th>
                                 <th>Loading</th>
+                                <th>Status</th>
                             </tr>
                         </thead>
                         <tbody id="audit-images-table"></tbody>
+                    </table>
+                </div>
+
+                <!-- 2. Table for Anchors -->
+                <div id="audit-anchors-section" class="table-container hidden">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Destination URL</th>
+                                <th>Anchor Text</th>
+                                <th>Title Attribute</th>
+                                <th>Status</th>
+                                <th>SEO Issue Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-anchors-table"></tbody>
                     </table>
                 </div>
             </div>

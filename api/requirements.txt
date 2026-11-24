@@ -3,4 +3,5 @@ beautifulsoup4>=4.11.0
 openpyxl>=3.0.10
 flask>=2.2.0
 flask-cors>=3.0.10
-pypdf>=3.0.0
+yt-dlp>=2024.3.10
+lxml>=4.9.0

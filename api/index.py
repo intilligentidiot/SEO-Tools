@@ -6,14 +6,20 @@ import time
 import urllib.parse
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
+from xml.sax.saxutils import escape as xml_escape
 
-from flask import Flask, request, jsonify, send_file, Response
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import requests
 from bs4 import BeautifulSoup
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+
+try:
+    import yt_dlp
+except ImportError:
+    yt_dlp = None
 
 app = Flask(__name__, static_folder="../public", static_url_path="")
 CORS(app)
@@ -143,7 +149,6 @@ def api_meta_scrape():
         if not urls:
             return jsonify({"error": "No URLs provided"}), 400
         
-        # Limit to 30 per request to respect Vercel serverless timeouts
         results = [fetch_meta_for_url(u.strip()) for u in urls[:30] if u.strip()]
         return jsonify({"results": results, "count": len(results)})
 
@@ -217,13 +222,23 @@ def api_meta_scrape():
 
 
 # -------------------------------------------------------------
-# 2. TOOL: XML IMAGE SITEMAP GENERATOR & CRAWLER
+# 2. TOOL: XML IMAGE SITEMAP GENERATOR & CRAWLER (ENHANCED)
 # -------------------------------------------------------------
+CSS_URL_RE = re.compile(r"""url\(\s*['"]?([^'")]+)['"]?\s*\)""", re.IGNORECASE)
+
+def title_from_filename(url: str) -> str:
+    path = urlparse(url).path
+    filename = path.rsplit("/", 1)[-1] if "/" in path else path
+    stem = filename.rsplit(".", 1)[0]
+    return stem.replace("-", " ").replace("_", " ").title()
+
 @app.route("/api/sitemap-crawler", methods=["POST"])
 def api_sitemap_crawler():
     data = request.get_json(silent=True) or {}
     action = data.get("action", "crawl")
     base_url = data.get("url", "").strip()
+    filter_webp_only = data.get("webp_only", False)
+    exclude_common = data.get("exclude_common", True)
 
     if not base_url:
         return jsonify({"error": "URL is required"}), 400
@@ -237,7 +252,7 @@ def api_sitemap_crawler():
     if action == "crawl":
         visited = set()
         to_visit = [base_url]
-        discovered_images = []
+        page_images_map = {}  # url -> list of {image_url, alt, title}
 
         while to_visit and len(visited) < max_pages:
             current_url = to_visit.pop(0)
@@ -246,66 +261,116 @@ def api_sitemap_crawler():
             visited.add(current_url)
 
             try:
-                resp = requests.get(current_url, headers=HEADERS, timeout=6)
+                resp = requests.get(current_url, headers=HEADERS, timeout=7)
                 if resp.status_code != 200:
                     continue
                 soup = BeautifulSoup(resp.text, "html.parser")
+                page_imgs = []
 
-                # Extract images
+                # 1. <img> tags
                 for img in soup.find_all("img"):
-                    src = img.get("src") or img.get("data-src") or ""
-                    if not src:
-                        srcset = img.get("srcset")
-                        if srcset:
-                            src = srcset.split(",")[0].strip().split(" ")[0]
-                    if src and not src.startswith("data:"):
-                        full_img_url = urljoin(current_url, src)
-                        alt = img.get("alt", "").strip()
-                        title = img.get("title", "").strip()
-                        discovered_images.append({
+                    candidates = []
+                    if img.get("src"): candidates.append(img["src"])
+                    if img.get("data-src"): candidates.append(img["data-src"])
+                    if img.get("srcset"):
+                        for part in img["srcset"].split(","):
+                            p_url = part.strip().split(" ")[0]
+                            if p_url: candidates.append(p_url)
+
+                    alt = img.get("alt", "").strip()
+                    title = img.get("title", "").strip()
+
+                    for src in candidates:
+                        if not src or src.startswith("data:"):
+                            continue
+                        abs_img = urljoin(current_url, src)
+                        is_webp = abs_img.lower().endswith(".webp")
+                        if filter_webp_only and not is_webp:
+                            continue
+                        
+                        display_title = title if title else (alt if alt else title_from_filename(abs_img))
+                        page_imgs.append({
                             "page_url": current_url,
-                            "image_url": full_img_url,
-                            "alt_text": alt if alt else (title if title else "N/A"),
-                            "is_webp": full_img_url.lower().endswith(".webp")
+                            "image_url": abs_img,
+                            "alt_text": alt or "N/A",
+                            "title": display_title,
+                            "is_webp": is_webp
                         })
 
-                # Internal link discovery for further crawling
+                # 2. CSS background images (inline styles & <style> tags)
+                for tag in soup.find_all(style=True):
+                    for match in CSS_URL_RE.finditer(tag["style"]):
+                        raw_src = match.group(1).strip()
+                        if raw_src and not raw_src.startswith("data:"):
+                            abs_img = urljoin(current_url, raw_src)
+                            is_webp = abs_img.lower().endswith(".webp")
+                            if filter_webp_only and not is_webp:
+                                continue
+                            page_imgs.append({
+                                "page_url": current_url,
+                                "image_url": abs_img,
+                                "alt_text": "CSS Background",
+                                "title": title_from_filename(abs_img),
+                                "is_webp": is_webp
+                            })
+
+                # Deduplicate per page
+                seen = set()
+                unique_page_imgs = []
+                for item in page_imgs:
+                    if item["image_url"] not in seen:
+                        seen.add(item["image_url"])
+                        unique_page_imgs.append(item)
+
+                page_images_map[current_url] = unique_page_imgs
+
+                # Discover internal links for queue
                 if len(visited) < max_pages:
                     for a in soup.find_all("a", href=True):
-                        link = urljoin(current_url, a["href"])
+                        link = urljoin(current_url, a["href"]).split("#")[0]
                         p_link = urlparse(link)
                         if p_link.netloc == domain and link not in visited and link not in to_visit:
-                            # Avoid non-html assets
-                            if not p_link.path.lower().endswith((".png", ".jpg", ".jpeg", ".pdf", ".zip", ".rar")):
+                            if not p_link.path.lower().endswith((".png", ".jpg", ".jpeg", ".pdf", ".zip", ".rar", ".mp4")):
                                 to_visit.append(link)
 
             except Exception:
                 continue
 
-        # Group images by page for XML generation
-        pages_dict = {}
-        for item in discovered_images:
-            pu = item["page_url"]
-            if pu not in pages_dict:
-                pages_dict[pu] = []
-            pages_dict[pu].append(item)
+        # Exclude common images (e.g. site-wide logos, icons appearing on >50% of crawled pages)
+        if exclude_common and len(page_images_map) > 2:
+            counts = {}
+            for imgs in page_images_map.values():
+                for im in imgs:
+                    counts[im["image_url"]] = counts.get(im["image_url"], 0) + 1
+            threshold = max(2, int(len(page_images_map) * 0.5))
+            common_urls = {u for u, c in counts.items() if c >= threshold}
 
-        # Build Google Image Sitemap XML
+            filtered_map = {}
+            for pu, imgs in page_images_map.items():
+                filtered_map[pu] = [im for im in imgs if im["image_url"] not in common_urls]
+            page_images_map = filtered_map
+
+        # Flatten list for client
+        all_discovered = []
+        for imgs in page_images_map.values():
+            all_discovered.extend(imgs)
+
+        # Build Standard Google Image Sitemap XML
         xml_lines = [
             '<?xml version="1.0" encoding="UTF-8"?>',
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"',
             '        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">'
         ]
-        for pu, imgs in pages_dict.items():
+        for pu, imgs in page_images_map.items():
+            if not imgs:
+                continue
             xml_lines.append("  <url>")
-            xml_lines.append(f"    <loc>{pu}</loc>")
-            for img in imgs[:100]:  # up to 100 images per page
+            xml_lines.append(f"    <loc>{xml_escape(pu)}</loc>")
+            for im in imgs[:100]:
                 xml_lines.append("    <image:image>")
-                safe_loc = img["image_url"].replace("&", "&amp;")
-                xml_lines.append(f"      <image:loc>{safe_loc}</image:loc>")
-                if img["alt_text"] and img["alt_text"] != "N/A":
-                    safe_title = img["alt_text"].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                    xml_lines.append(f"      <image:title>{safe_title}</image:title>")
+                xml_lines.append(f"      <image:loc>{xml_escape(im['image_url'])}</image:loc>")
+                if im["title"] and im["title"] != "N/A":
+                    xml_lines.append(f"      <image:title>{xml_escape(im['title'])}</image:title>")
                 xml_lines.append("    </image:image>")
             xml_lines.append("  </url>")
         xml_lines.append("</urlset>")
@@ -313,8 +378,8 @@ def api_sitemap_crawler():
 
         return jsonify({
             "pages_crawled": len(visited),
-            "total_images": len(discovered_images),
-            "images": discovered_images[:200],
+            "total_images": len(all_discovered),
+            "images": all_discovered[:300],
             "xml_sitemap": sitemap_xml
         })
 
@@ -322,7 +387,7 @@ def api_sitemap_crawler():
 
 
 # -------------------------------------------------------------
-# 3. TOOL: DEEP SEO & IMAGE AUDITOR
+# 3. TOOL: DEEP SEO & IMAGE AUDITOR (WITH EXCEL DOWNLOAD)
 # -------------------------------------------------------------
 @app.route("/api/seo-audit", methods=["POST"])
 def api_seo_audit():
@@ -335,136 +400,254 @@ def api_seo_audit():
     if not url.startswith("http://") and not url.startswith("https://"):
         url = "https://" + url
 
-    if action == "audit":
-        try:
-            resp = requests.get(url, headers=HEADERS, timeout=10)
-            soup = BeautifulSoup(resp.text, "html.parser")
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=10)
+        soup = BeautifulSoup(resp.text, "html.parser")
 
-            # Document Title & Meta
-            title_tag = soup.find("title")
-            title = title_tag.get_text(strip=True) if title_tag else ""
+        # Basic Head & Meta
+        title_tag = soup.find("title")
+        title = title_tag.get_text(strip=True) if title_tag else ""
 
-            desc_tag = soup.find("meta", attrs={"name": re.compile(r"^description$", re.I)})
-            desc = desc_tag.get("content", "").strip() if desc_tag else ""
+        desc_tag = soup.find("meta", attrs={"name": re.compile(r"^description$", re.I)})
+        desc = desc_tag.get("content", "").strip() if desc_tag else ""
 
-            viewport_tag = soup.find("meta", attrs={"name": "viewport"})
-            has_viewport = bool(viewport_tag)
+        viewport_tag = soup.find("meta", attrs={"name": "viewport"})
+        has_viewport = bool(viewport_tag)
 
-            canonical_tag = soup.find("link", attrs={"rel": "canonical"})
-            canonical = canonical_tag.get("href", "").strip() if canonical_tag else ""
+        canonical_tag = soup.find("link", attrs={"rel": "canonical"})
+        canonical = canonical_tag.get("href", "").strip() if canonical_tag else ""
 
-            h1_tags = [h.get_text(strip=True) for h in soup.find_all("h1")]
-            h2_tags = [h.get_text(strip=True) for h in soup.find_all("h2")]
+        h1_tags = [h.get_text(strip=True) for h in soup.find_all("h1")]
+        h2_tags = [h.get_text(strip=True) for h in soup.find_all("h2")]
 
-            # Image Audit
-            images_data = []
-            missing_alt_count = 0
-            missing_dimensions_count = 0
-            improper_format_count = 0
-            lazy_loaded_count = 0
+        # Deep Image Audits
+        images_data = []
+        missing_alt_count = 0
+        missing_title_count = 0
+        missing_dimensions_count = 0
+        improper_format_count = 0
+        lazy_loaded_count = 0
 
-            PERMISSIBLE_FORMATS = {"webp", "svg", "gif"}
+        PERMISSIBLE_FORMATS = {"webp", "svg", "gif"}
 
-            all_imgs = soup.find_all("img")
-            for idx, img in enumerate(all_imgs, 1):
-                src = img.get("src") or img.get("data-src") or ""
-                full_src = urljoin(url, src) if src else ""
-                alt = img.get("alt")
-                width = img.get("width")
-                height = img.get("height")
-                loading = img.get("loading", "eager").lower()
+        all_imgs = soup.find_all("img")
+        for idx, img in enumerate(all_imgs, 1):
+            src = img.get("src") or img.get("data-src") or ""
+            full_src = urljoin(url, src) if src else ""
+            alt = img.get("alt")
+            title_attr = img.get("title")
+            width = img.get("width")
+            height = img.get("height")
+            loading = img.get("loading", "eager").lower()
 
-                # Extension check
-                clean_path = urlparse(full_src).path.lower()
-                ext = clean_path.split(".")[-1] if "." in clean_path else "unknown"
+            clean_path = urlparse(full_src).path.lower()
+            ext = clean_path.split(".")[-1] if "." in clean_path else "unknown"
 
-                is_alt_missing = (alt is None or alt.strip() == "")
-                is_dim_missing = (not width or not height)
-                is_format_warning = (ext not in PERMISSIBLE_FORMATS and ext in {"jpg", "jpeg", "png"})
+            is_alt_missing = (alt is None or alt.strip() == "")
+            is_title_missing = (title_attr is None or title_attr.strip() == "")
+            is_dim_missing = (not width or not height)
+            is_format_warning = (ext not in PERMISSIBLE_FORMATS and ext in {"jpg", "jpeg", "png"})
 
-                if is_alt_missing: missing_alt_count += 1
-                if is_dim_missing: missing_dimensions_count += 1
-                if is_format_warning: improper_format_count += 1
-                if loading == "lazy": lazy_loaded_count += 1
+            if is_alt_missing: missing_alt_count += 1
+            if is_title_missing: missing_title_count += 1
+            if is_dim_missing: missing_dimensions_count += 1
+            if is_format_warning: improper_format_count += 1
+            if loading == "lazy": lazy_loaded_count += 1
 
-                images_data.append({
-                    "index": idx,
-                    "src": full_src,
-                    "alt": alt.strip() if alt else "[MISSING]",
-                    "has_alt": not is_alt_missing,
-                    "dimensions": f"{width}x{height}" if not is_dim_missing else "Missing",
-                    "has_dimensions": not is_dim_missing,
-                    "format": ext.upper(),
-                    "is_modern_format": ext in PERMISSIBLE_FORMATS,
-                    "loading": loading
-                })
+            status = "✅ OK"
+            if is_alt_missing or is_dim_missing or is_format_warning:
+                status = "⚠️ Needs Optimization"
 
-            # Links Audit
-            links_data = []
-            missing_anchor_titles = 0
-            for a in soup.find_all("a", href=True):
-                href = a["href"].strip()
-                title_attr = a.get("title", "").strip()
-                anchor_text = a.get_text(strip=True)
-                if not title_attr:
-                    missing_anchor_titles += 1
-                links_data.append({
-                    "href": urljoin(url, href),
-                    "text": anchor_text[:40],
-                    "title": title_attr if title_attr else "[MISSING]"
-                })
-
-            # Calculate Health Score (out of 100)
-            score = 100
-            if not title: score -= 15
-            elif len(title) < 30 or len(title) > 65: score -= 5
-
-            if not desc: score -= 15
-            elif len(desc) < 70 or len(desc) > 165: score -= 5
-
-            if len(h1_tags) == 0: score -= 15
-            elif len(h1_tags) > 1: score -= 5
-
-            if not has_viewport: score -= 15
-
-            total_imgs = len(all_imgs)
-            if total_imgs > 0:
-                alt_ratio = (total_imgs - missing_alt_count) / total_imgs
-                dim_ratio = (total_imgs - missing_dimensions_count) / total_imgs
-                score -= int((1 - alt_ratio) * 20)
-                score -= int((1 - dim_ratio) * 10)
-
-            score = max(5, min(100, score))
-
-            return jsonify({
-                "url": url,
-                "score": score,
-                "title": title,
-                "title_length": len(title),
-                "description": desc,
-                "description_length": len(desc),
-                "h1_tags": h1_tags,
-                "h2_tags": h2_tags[:5],
-                "canonical": canonical,
-                "has_viewport": has_viewport,
-                "image_stats": {
-                    "total": total_imgs,
-                    "missing_alt": missing_alt_count,
-                    "missing_dimensions": missing_dimensions_count,
-                    "improper_format": improper_format_count,
-                    "lazy_loaded": lazy_loaded_count
-                },
-                "link_stats": {
-                    "total": len(links_data),
-                    "missing_title": missing_anchor_titles
-                },
-                "images": images_data[:100]
+            images_data.append({
+                "index": idx,
+                "src": full_src,
+                "alt": alt.strip() if alt else "MISSING",
+                "has_alt": not is_alt_missing,
+                "title": title_attr.strip() if title_attr else "MISSING",
+                "has_title": not is_title_missing,
+                "dimensions": f"{width}x{height}" if not is_dim_missing else "MISSING",
+                "has_dimensions": not is_dim_missing,
+                "format": ext.upper(),
+                "is_modern_format": ext in PERMISSIBLE_FORMATS,
+                "loading": loading,
+                "status": status
             })
 
-        except Exception as e:
-            return jsonify({"error": f"Failed to audit: {str(e)}"}), 500
+        # Deep Anchor Link Audits (from New folder/SEO)
+        links_data = []
+        missing_anchor_titles = 0
+        title_matches_text_count = 0
 
-    return jsonify({"error": "Invalid action"}), 400
+        for a in soup.find_all("a", href=True):
+            href = a["href"].strip()
+            anchor_title = a.get("title", "").strip()
+            anchor_text = a.get_text(strip=True)
+
+            is_title_missing = not bool(anchor_title)
+            is_title_matches = (bool(anchor_title) and anchor_title.lower() == anchor_text.lower())
+
+            if is_title_missing: missing_anchor_titles += 1
+            if is_title_matches: title_matches_text_count += 1
+
+            status = "✅ OK"
+            issue_note = "Valid Title"
+            if is_title_missing:
+                status = "⚠️ Missing Title"
+                issue_note = "Missing anchor title tag"
+            elif is_title_matches:
+                status = "⚠️ Duplicate"
+                issue_note = "Title tag identical to anchor text (bad SEO)"
+
+            links_data.append({
+                "href": urljoin(url, href),
+                "text": anchor_text[:60] or "[No Text / Icon]",
+                "title": anchor_title or "MISSING",
+                "status": status,
+                "issue_note": issue_note
+            })
+
+        # Calculate Overall Health Score
+        score = 100
+        if not title: score -= 15
+        elif len(title) < 30 or len(title) > 65: score -= 5
+
+        if not desc: score -= 15
+        elif len(desc) < 70 or len(desc) > 165: score -= 5
+
+        if len(h1_tags) == 0: score -= 15
+        elif len(h1_tags) > 1: score -= 5
+
+        if not has_viewport: score -= 15
+
+        total_imgs = len(all_imgs)
+        if total_imgs > 0:
+            alt_ratio = (total_imgs - missing_alt_count) / total_imgs
+            dim_ratio = (total_imgs - missing_dimensions_count) / total_imgs
+            score -= int((1 - alt_ratio) * 20)
+            score -= int((1 - dim_ratio) * 10)
+
+        score = max(5, min(100, score))
+
+        # IF ACTION == EXPORT EXCEL (The requested feature from images checker)
+        if action == "export_excel":
+            wb = openpyxl.Workbook()
+            header_fill = PatternFill(start_color="1F4788", end_color="1F4788", fill_type="solid")
+            header_font = Font(name="Arial", bold=True, color="FFFFFF", size=11)
+            ok_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+            issue_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+            border = Border(left=Side(style='thin', color="CCCCCC"),
+                            right=Side(style='thin', color="CCCCCC"),
+                            top=Side(style='thin', color="CCCCCC"),
+                            bottom=Side(style='thin', color="CCCCCC"))
+            center_align = Alignment(horizontal='center', vertical='center')
+
+            # --- Sheet 1: Summary Report ---
+            ws_sum = wb.active
+            ws_sum.title = "Summary Report"
+            sum_headers = ['Audited URL', 'Total Images', 'Compliant Images', 'Issues Found', 'Compliance %', 'Total Links', 'Links Missing Titles', 'Timestamp']
+            for col, text in enumerate(sum_headers, 1):
+                c = ws_sum.cell(row=1, column=col, value=text)
+                c.fill = header_fill
+                c.font = header_font
+                c.alignment = center_align
+                c.border = border
+
+            comp_imgs = total_imgs - missing_alt_count - missing_dimensions_count
+            comp_pct = f"{(max(0, comp_imgs) / total_imgs * 100):.1f}%" if total_imgs > 0 else "100%"
+            row_vals = [url, total_imgs, max(0, comp_imgs), missing_alt_count + missing_dimensions_count, comp_pct, len(links_data), missing_anchor_titles, datetime.now().strftime("%Y-%m-%d %H:%M:%S")]
+            for col, val in enumerate(row_vals, 1):
+                c = ws_sum.cell(row=2, column=col, value=val)
+                c.border = border
+                c.alignment = center_align
+
+            # --- Sheet 2: Detailed Image Audit ---
+            ws_img = wb.create_sheet("Image Audit")
+            img_headers = ['Page URL', 'Image URL', 'Alt Text', 'Title Tag', 'Loading Attribute', 'Dimensions', 'Format', 'Status']
+            for col, text in enumerate(img_headers, 1):
+                c = ws_img.cell(row=1, column=col, value=text)
+                c.fill = header_fill
+                c.font = header_font
+                c.alignment = center_align
+                c.border = border
+
+            for r_idx, im in enumerate(images_data, 2):
+                r_data = [url, im['src'], im['alt'], im['title'], im['loading'], im['dimensions'], im['format'], im['status']]
+                for c_idx, v in enumerate(r_data, 1):
+                    cell = ws_img.cell(row=r_idx, column=c_idx, value=v)
+                    cell.border = border
+                    if v == "MISSING":
+                        cell.fill = issue_fill
+                    elif c_idx == 8:
+                        cell.fill = ok_fill if "OK" in v else issue_fill
+
+            # --- Sheet 3: Anchor Link Audit (from SEO folder) ---
+            ws_links = wb.create_sheet("Anchor Links Audit")
+            link_headers = ['Page URL', 'Destination URL', 'Anchor Text', 'Title Attribute', 'Status', 'SEO Issue Details']
+            for col, text in enumerate(link_headers, 1):
+                c = ws_links.cell(row=1, column=col, value=text)
+                c.fill = header_fill
+                c.font = header_font
+                c.alignment = center_align
+                c.border = border
+
+            for r_idx, lnk in enumerate(links_data, 2):
+                r_data = [url, lnk['href'], lnk['text'], lnk['title'], lnk['status'], lnk['issue_note']]
+                for c_idx, v in enumerate(r_data, 1):
+                    cell = ws_links.cell(row=r_idx, column=c_idx, value=v)
+                    cell.border = border
+                    if "Missing" in str(v) or "Duplicate" in str(v):
+                        cell.fill = issue_fill
+                    elif c_idx == 5 and "OK" in str(v):
+                        cell.fill = ok_fill
+
+            # Auto width
+            for ws in [ws_sum, ws_img, ws_links]:
+                for col in ws.columns:
+                    max_len = max(len(str(cell.value or '')) for cell in col)
+                    col_letter = get_column_letter(col[0].column)
+                    ws.column_dimensions[col_letter].width = min(max_len + 3, 50)
+
+            buf = io.BytesIO()
+            wb.save(buf)
+            buf.seek(0)
+            return send_file(
+                buf,
+                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                as_attachment=True,
+                download_name="detailed_seo_audit_report.xlsx"
+            )
+
+        # Standard JSON audit response
+        return jsonify({
+            "url": url,
+            "score": score,
+            "title": title,
+            "title_length": len(title),
+            "description": desc,
+            "description_length": len(desc),
+            "h1_tags": h1_tags,
+            "h2_tags": h2_tags[:5],
+            "canonical": canonical,
+            "has_viewport": has_viewport,
+            "image_stats": {
+                "total": total_imgs,
+                "missing_alt": missing_alt_count,
+                "missing_title": missing_title_count,
+                "missing_dimensions": missing_dimensions_count,
+                "improper_format": improper_format_count,
+                "lazy_loaded": lazy_loaded_count
+            },
+            "link_stats": {
+                "total": len(links_data),
+                "missing_title": missing_anchor_titles,
+                "duplicate_title": title_matches_text_count
+            },
+            "images": images_data[:150],
+            "links": links_data[:100]
+        })
+
+    except Exception as e:
+        return jsonify({"error": f"Failed to audit: {str(e)}"}), 500
 
 
 # -------------------------------------------------------------
@@ -514,7 +697,6 @@ def api_backlink_finder():
     templates = CATEGORIES.get(category, CATEGORIES["guest_blogs"])
     queries = [tpl.replace("{kw}", keyword) for tpl in templates]
 
-    # Add country keyword if present
     country_suffix = f" {country}" if country else ""
     generated_search_urls = []
 
@@ -530,11 +712,9 @@ def api_backlink_finder():
             "duck_url": duck_url
         })
 
-    # Perform DuckDuckGo live scrape on first footprint to get real link candidates
     live_opportunities = []
     try:
         sample_q = queries[0] + country_suffix
-        duck_search = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(sample_q)}"
         resp = requests.post(
             "https://html.duckduckgo.com/html/",
             data={"q": sample_q},
@@ -544,11 +724,9 @@ def api_backlink_finder():
         if resp.status_code == 200:
             soup = BeautifulSoup(resp.text, "html.parser")
             for result in soup.find_all("div", class_="result__body")[:15]:
-                title_elem = result.find("a", class_="result__snippet") or result.find("a", class_="result__url")
                 url_elem = result.find("a", class_="result__url")
                 raw_href = url_elem.get("href", "") if url_elem else ""
 
-                # DuckDuckGo redirect unwrapping
                 actual_url = raw_href
                 if "uddg=" in raw_href:
                     match = re.search(r"uddg=([^&]+)", raw_href)
@@ -586,10 +764,10 @@ def api_schema_gen():
     schema_type = data.get("schema_type", "Article")
     headline = data.get("headline", "").strip() or "Untitled Document"
     description = data.get("description", "").strip()
-    author = data.get("author", "").strip() or "Editorial Team"
-    page_url = data.get("url", "").strip() or "https://example.com/article"
-    image_url = data.get("image", "").strip() or "https://example.com/image.jpg"
-    publisher = data.get("publisher", "").strip() or "Organization"
+    author = data.get("author", "").strip() or "Tesla Mechanical Designs"
+    page_url = data.get("url", "").strip() or "https://www.teslamechanicaldesigns.com"
+    image_url = data.get("image", "").strip() or "https://www.teslamechanicaldesigns.com/images/hero.webp"
+    publisher = data.get("publisher", "").strip() or "Tesla Mechanical Designs"
     date_published = data.get("date_published", "").strip() or datetime.utcnow().strftime("%Y-%m-%d")
 
     if schema_type == "Article":
@@ -618,24 +796,6 @@ def api_schema_gen():
             "datePublished": date_published,
             "dateModified": date_published
         }
-    elif schema_type == "FAQ":
-        questions = data.get("faqs", [
-            {"q": "What is this service?", "a": "We provide top quality web and SEO solutions."}
-        ])
-        schema_obj = {
-            "@context": "https://schema.org",
-            "@type": "FAQPage",
-            "mainEntity": [
-                {
-                    "@type": "Question",
-                    "name": item.get("q", ""),
-                    "acceptedAnswer": {
-                        "@type": "Answer",
-                        "text": item.get("a", "")
-                    }
-                } for item in questions if item.get("q")
-            ]
-        }
     else:
         schema_obj = {
             "@context": "https://schema.org",
@@ -655,7 +815,7 @@ def api_schema_gen():
 
 
 # -------------------------------------------------------------
-# 6. TOOL: YOUTUBE SHORTS TREND HUNTER
+# 6. TOOL: YOUTUBE SHORTS TREND HUNTER (ENHANCED YT-DLP)
 # -------------------------------------------------------------
 @app.route("/api/shorts-hunter", methods=["POST"])
 def api_shorts_hunter():
@@ -667,32 +827,29 @@ def api_shorts_hunter():
         return jsonify({"error": "Search query is required"}), 400
 
     results = []
-    try:
-        search_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote(query + ' shorts')}"
-        resp = requests.get(search_url, headers=HEADERS, timeout=8)
 
-        # YouTube embeds initialData in page HTML
-        match = re.search(r"var ytInitialData = ({.*?});</script>", resp.text)
-        if match:
-            raw_data = json.loads(match.group(1))
-            sections = (
-                raw_data.get("contents", {})
-                .get("twoColumnSearchResultsRenderer", {})
-                .get("primaryContents", {})
-                .get("sectionListRenderer", {})
-                .get("contents", [])
-            )
-            for section in sections:
-                item_section = section.get("itemSectionRenderer", {}).get("contents", [])
-                for item in item_section:
-                    # Video renderer
-                    vr = item.get("videoRenderer")
-                    if vr:
-                        vid_id = vr.get("videoId")
-                        title = vr.get("title", {}).get("runs", [{}])[0].get("text", "N/A")
-                        channel = vr.get("ownerText", {}).get("runs", [{}])[0].get("text", "N/A")
-                        views = vr.get("viewCountText", {}).get("simpleText", "N/A")
-                        duration = vr.get("lengthText", {}).get("simpleText", "N/A")
+    # 1. Try yt-dlp first (matching youtube-shorts-hunter/main.py)
+    if yt_dlp is not None:
+        try:
+            ydl_opts = {
+                'quiet': True,
+                'no_warnings': True,
+                'extract_flat': 'in_playlist',
+                'default_search': 'ytsearch',
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                search_query = f"ytsearch{max_results}:{query} shorts"
+                search_results = ydl.extract_info(search_query, download=False)
+                if search_results and 'entries' in search_results:
+                    for entry in search_results['entries']:
+                        if not entry: continue
+                        vid_id = entry.get('id', '')
+                        title = entry.get('title', 'N/A')
+                        channel = entry.get('channel') or entry.get('uploader') or 'N/A'
+                        views_raw = entry.get('view_count')
+                        views = f"{views_raw:,}" if isinstance(views_raw, int) else (views_raw or "N/A")
+                        duration_raw = entry.get('duration')
+                        duration = f"{duration_raw}s" if duration_raw else "Short"
 
                         if vid_id:
                             results.append({
@@ -705,10 +862,50 @@ def api_shorts_hunter():
                             })
                             if len(results) >= max_results:
                                 break
-                if len(results) >= max_results:
-                    break
-    except Exception as e:
-        return jsonify({"error": f"Failed to search YouTube: {str(e)}"}), 500
+        except Exception:
+            pass
+
+    # 2. Resilient fallback scraper if yt-dlp was throttled
+    if not results:
+        try:
+            search_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote(query + ' shorts')}"
+            resp = requests.get(search_url, headers=HEADERS, timeout=8)
+            match = re.search(r"var ytInitialData = ({.*?});</script>", resp.text)
+            if match:
+                raw_data = json.loads(match.group(1))
+                sections = (
+                    raw_data.get("contents", {})
+                    .get("twoColumnSearchResultsRenderer", {})
+                    .get("primaryContents", {})
+                    .get("sectionListRenderer", {})
+                    .get("contents", [])
+                )
+                for section in sections:
+                    item_section = section.get("itemSectionRenderer", {}).get("contents", [])
+                    for item in item_section:
+                        vr = item.get("videoRenderer")
+                        if vr:
+                            vid_id = vr.get("videoId")
+                            title = vr.get("title", {}).get("runs", [{}])[0].get("text", "N/A")
+                            channel = vr.get("ownerText", {}).get("runs", [{}])[0].get("text", "N/A")
+                            views = vr.get("viewCountText", {}).get("simpleText", "N/A")
+                            duration = vr.get("lengthText", {}).get("simpleText", "N/A")
+
+                            if vid_id:
+                                results.append({
+                                    "video_id": vid_id,
+                                    "title": title,
+                                    "channel": channel,
+                                    "views": views,
+                                    "duration": duration,
+                                    "url": f"https://www.youtube.com/shorts/{vid_id}"
+                                })
+                                if len(results) >= max_results:
+                                    break
+                    if len(results) >= max_results:
+                        break
+        except Exception as e:
+            return jsonify({"error": f"Failed to search: {str(e)}"}), 500
 
     return jsonify({
         "query": query,
