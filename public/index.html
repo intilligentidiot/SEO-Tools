@@ -7,6 +7,7 @@
     <meta name="description" content="Precision engineering SEO tools suite: Meta Tag Scraper, Google Image Sitemap Generator, Deep Image & Page Auditor, Backlink Finder, Schema.org Generator, Shorts Hunter, and Universal Video Downloader.">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
     <link rel="stylesheet" href="style.css">
+    <meta name="robots" content="noindex, nofollow">
 </head>
 <body>
 
@@ -59,7 +60,7 @@
                     <span>URLs to scan (one per line)</span>
                     <span id="meta-url-count">0 URLs</span>
                 </div>
-                <textarea id="meta-url-input" placeholder="https://www.teslamechanicaldesigns.com&#10;https://www.teslamechanicaldesigns.com/3d-modeling-services.php"></textarea>
+                <textarea id="meta-url-input" placeholder="https://www.website.com&#10;https://www.website.com/3d-modeling-services.php"></textarea>
                 
                 <div class="button-group">
                     <button id="meta-scan-btn" class="btn primary">⚡ Scan All URLs</button>
@@ -91,7 +92,7 @@
                 <div class="input-row">
                     <div class="input-col" style="flex: 2.5;">
                         <div class="meta-label">Starting Domain or Page URL</div>
-                        <input type="text" id="sitemap-url-input" placeholder="https://www.teslamechanicaldesigns.com" />
+                        <input type="text" id="sitemap-url-input" placeholder="https://www.website.com" />
                     </div>
                     <div class="input-col" style="flex: 1;">
                         <div class="meta-label">Max Pages</div>
@@ -160,7 +161,7 @@
             <div class="card">
                 <div class="meta-label">Page URL to Audit</div>
                 <div class="input-row">
-                    <input type="text" id="audit-url-input" placeholder="https://www.teslamechanicaldesigns.com" style="flex: 1;" />
+                    <input type="text" id="audit-url-input" placeholder="https://www.website.com" style="flex: 1;" />
                     <button id="audit-btn" class="btn primary">🔍 Run Diagnostics</button>
                 </div>
                 <div id="audit-status" class="status-text hidden"></div>
@@ -338,11 +339,11 @@
                     </div>
                     <div class="input-col">
                         <div class="meta-label">Page Canonical URL</div>
-                        <input type="text" id="schema-page-url" placeholder="https://www.teslamechanicaldesigns.com/services.php" />
+                        <input type="text" id="schema-page-url" placeholder="https://www.website.com/services.php" />
                     </div>
                     <div class="input-col">
                         <div class="meta-label">Feature Image URL</div>
-                        <input type="text" id="schema-image-url" placeholder="https://www.teslamechanicaldesigns.com/images/hero.webp" />
+                        <input type="text" id="schema-image-url" placeholder="https://www.website.com/images/hero.webp" />
                     </div>
                 </div>
 
