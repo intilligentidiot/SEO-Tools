@@ -16,10 +16,17 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
+import xml.etree.ElementTree as ET
+
 try:
     import yt_dlp
 except ImportError:
     yt_dlp = None
+
+try:
+    import pypdf
+except ImportError:
+    pypdf = None
 
 app = Flask(__name__, static_folder="../public", static_url_path="")
 CORS(app)
@@ -250,9 +257,37 @@ def api_sitemap_crawler():
     max_pages = min(int(data.get("max_pages", 10)), 25)
 
     if action == "crawl":
+        crawl_mode = data.get("crawl_mode", "crawler")
         visited = set()
         to_visit = [base_url]
         page_images_map = {}  # url -> list of {image_url, alt, title}
+
+        if crawl_mode == "sitemap_xml":
+            def _get_sitemap_pages(sm_url, depth=0):
+                if depth > 2:
+                    return []
+                found = []
+                try:
+                    r = requests.get(sm_url, headers=HEADERS, timeout=7)
+                    if r.status_code == 200:
+                        root = ET.fromstring(r.content)
+                        ns = {"ns": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+                        sub_sitemaps = root.findall(".//ns:sitemap/ns:loc", ns)
+                        if sub_sitemaps:
+                            for sm in sub_sitemaps[:5]:
+                                if sm.text:
+                                    found.extend(_get_sitemap_pages(sm.text.strip(), depth + 1))
+                        else:
+                            for u in root.findall(".//ns:url/ns:loc", ns):
+                                if u.text:
+                                    found.append(u.text.strip())
+                except Exception:
+                    pass
+                return found
+
+            sm_pages = _get_sitemap_pages(base_url)
+            if sm_pages:
+                to_visit = sm_pages[:max_pages]
 
         while to_visit and len(visited) < max_pages:
             current_url = to_visit.pop(0)
@@ -812,6 +847,53 @@ def api_schema_gen():
         "schema_json": schema_obj,
         "json_ld_code": html_snippet
     })
+
+
+@app.route("/api/pdf-extract-schema", methods=["POST"])
+def api_pdf_extract_schema():
+    if pypdf is None:
+        return jsonify({"error": "pypdf library is not installed on the server"}), 500
+    if "file" not in request.files:
+        return jsonify({"error": "No PDF file uploaded"}), 400
+
+    pdf_file = request.files["file"]
+    if not pdf_file.filename.lower().endswith(".pdf"):
+        return jsonify({"error": "Please upload a valid .pdf file"}), 400
+
+    try:
+        reader = pypdf.PdfReader(pdf_file.stream)
+        info = reader.metadata or {}
+
+        stem = pdf_file.filename.rsplit(".", 1)[0]
+        headline = str(info.get("/Title") or "").strip() or stem
+        author = str(info.get("/Author") or "").strip() or "Unknown Author"
+
+        raw_date = str(info.get("/CreationDate") or "")
+        date_published = datetime.utcnow().strftime("%Y-%m-%d")
+        if raw_date:
+            try:
+                clean_d = raw_date.replace("D:", "").split("+")[0].replace("'", "")
+                dt = datetime.strptime(clean_d[:8], "%Y%m%d")
+                date_published = dt.strftime("%Y-%m-%d")
+            except Exception:
+                pass
+
+        description = ""
+        if len(reader.pages) > 0:
+            first_text = reader.pages[0].extract_text() or ""
+            clean_text = " ".join(first_text.split())
+            if clean_text:
+                description = clean_text[:300] + ("..." if len(clean_text) > 300 else "")
+
+        return jsonify({
+            "headline": headline,
+            "author": author,
+            "date_published": date_published,
+            "description": description or "No text description extracted from PDF.",
+            "filename": pdf_file.filename
+        })
+    except Exception as e:
+        return jsonify({"error": f"Failed to parse PDF: {str(e)}"}), 500
 
 
 # -------------------------------------------------------------

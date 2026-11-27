@@ -191,6 +191,7 @@ let currentDiscoveredImages = [];
 
 document.getElementById("sitemap-crawl-btn")?.addEventListener("click", async () => {
     const url = document.getElementById("sitemap-url-input").value.trim();
+    const crawlMode = document.getElementById("sitemap-crawl-mode")?.value || "crawler";
     const maxPages = document.getElementById("sitemap-max-pages").value;
     const webpOnly = document.getElementById("sitemap-webp-only").checked;
     const excludeCommon = document.getElementById("sitemap-exclude-common").checked;
@@ -209,6 +210,7 @@ document.getElementById("sitemap-crawl-btn")?.addEventListener("click", async ()
             body: JSON.stringify({
                 action: "crawl",
                 url,
+                crawl_mode: crawlMode,
                 max_pages: maxPages,
                 webp_only: webpOnly,
                 exclude_common: excludeCommon
@@ -490,6 +492,37 @@ document.getElementById("backlink-clear-btn")?.addEventListener("click", () => {
 // 5. TOOL: SCHEMA.ORG & JSON-LD GENERATOR
 // ========================================================
 let currentSchemaCode = "";
+
+document.getElementById("schema-pdf-btn")?.addEventListener("click", async () => {
+    const fileInput = document.getElementById("schema-pdf-upload");
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+        return alert("Please select a .pdf file first.");
+    }
+    const btn = document.getElementById("schema-pdf-btn");
+    btn.disabled = true;
+    showStatus("schema-pdf-status", "Extracting metadata and text excerpt from PDF...", true);
+
+    try {
+        const formData = new FormData();
+        formData.append("file", fileInput.files[0]);
+        const resp = await fetch(`${API_BASE}/api/pdf-extract-schema`, {
+            method: "POST",
+            body: formData
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        const data = await resp.json();
+
+        document.getElementById("schema-headline").value = data.headline || "";
+        document.getElementById("schema-desc").value = data.description || "";
+        document.getElementById("schema-author").value = data.author || "";
+        hideStatus("schema-pdf-status");
+        document.getElementById("schema-gen-btn")?.click();
+    } catch (err) {
+        showStatus("schema-pdf-status", `Error: ${err.message}`);
+    } finally {
+        btn.disabled = false;
+    }
+});
 
 document.getElementById("schema-gen-btn")?.addEventListener("click", async () => {
     const schema_type = document.getElementById("schema-type").value;

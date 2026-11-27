@@ -5,3 +5,4 @@ flask>=2.2.0
 flask-cors>=3.0.10
 yt-dlp>=2024.3.10
 lxml>=4.9.0
+pypdf>=3.0.0

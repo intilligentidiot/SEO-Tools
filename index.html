@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SEO & Web Growth Suite — Tesla Mechanical Designs</title>
+    <meta name="robots" content="noindex, nofollow">
     <meta name="description" content="Precision engineering SEO tools suite: Meta Tag Scraper, Google Image Sitemap Generator, Deep Image & Page Auditor, Backlink Finder, Schema.org Generator, Shorts Hunter, and Universal Video Downloader.">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
     <link rel="stylesheet" href="style.css">
@@ -12,13 +13,12 @@
 
     <main class="app-container">
         <!-- ======================================================== -->
-        <!-- TOP BRAND HEADER (CLEAN WHITE ON GRAPHITE NAVY) -->
+        <!-- TOP BRAND HEADER (CLEAN WHITE) -->
         <!-- ======================================================== -->
         <header class="top-brand-header">
             <div class="brand-logo-lockup">
-                <img src="tesla-logo.svg" alt="Tesla Mechanical Designs" class="brand-logo-img">
-                <div class="brand-suite-tag">
-                    <span class="brand-suite-title">SEO & Growth Engine</span>
+                <div class="brand-suite-tag" style="border-left: none; padding-left: 0;">
+                    <span class="brand-suite-title" style="font-size: 18px;">SEO &amp; Growth Engine</span>
                     <span class="brand-badge-pro">PRO SUITE</span>
                 </div>
             </div>
@@ -90,11 +90,18 @@
 
             <div class="card">
                 <div class="input-row">
-                    <div class="input-col" style="flex: 2.5;">
-                        <div class="meta-label">Starting Domain or Page URL</div>
+                    <div class="input-col" style="flex: 2;">
+                        <div class="meta-label">Starting Domain or Sitemap XML URL</div>
                         <input type="text" id="sitemap-url-input" placeholder="https://www.teslamechanicaldesigns.com" />
                     </div>
-                    <div class="input-col" style="flex: 1;">
+                    <div class="input-col" style="flex: 1.2;">
+                        <div class="meta-label">Crawl Mode</div>
+                        <select id="sitemap-crawl-mode">
+                            <option value="crawler">Website Link Crawler</option>
+                            <option value="sitemap_xml">XML Sitemap Extractor</option>
+                        </select>
+                    </div>
+                    <div class="input-col" style="flex: 0.8;">
                         <div class="meta-label">Max Pages</div>
                         <input type="number" id="sitemap-max-pages" min="1" max="25" value="10" />
                     </div>
@@ -315,6 +322,14 @@
             </div>
 
             <div class="card">
+                <div style="background: var(--bg-subtle); border: 1px dashed var(--border-color); border-radius: 8px; padding: 14px; margin-bottom: 18px;">
+                    <div class="meta-label">Auto-Extract Metadata from PDF (pdf_schema_generator)</div>
+                    <div class="input-row" style="margin-bottom: 0; align-items: center;">
+                        <input type="file" id="schema-pdf-upload" accept=".pdf" style="flex: 1; padding: 8px;" />
+                        <button id="schema-pdf-btn" class="btn download">📄 Extract from PDF</button>
+                    </div>
+                    <div id="schema-pdf-status" class="status-text hidden" style="margin-top: 8px;"></div>
+                </div>
                 <div class="input-row">
                     <div class="input-col" style="flex: 1;">
                         <div class="meta-label">Schema Type</div>
