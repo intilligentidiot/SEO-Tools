@@ -1091,7 +1091,7 @@ def api_full_checklist_audit():
             "category": cat,
             "particular": particular,
             "status": status,  # PASS, WARN, FAIL
-            "value": str(value)[:250],
+            "value": str(value)[:2000],
             "remark": remark
         })
 
@@ -1233,37 +1233,44 @@ def api_full_checklist_audit():
 
     # Robots / Googlebot / Bingbot / Noindex
     rob_tag = soup.find("meta", attrs={"name": re.compile("^robots$", re.I)})
+    gbot_tag = soup.find("meta", attrs={"name": re.compile("^googlebot$", re.I)})
+    bbot_tag = soup.find("meta", attrs={"name": re.compile("^bingbot$", re.I)})
     rob_val = rob_tag.get("content", "").strip() if rob_tag else ""
+    gbot_val = gbot_tag.get("content", "").strip() if gbot_tag else ""
+    bbot_val = bbot_tag.get("content", "").strip() if bbot_tag else ""
     has_noindex = "noindex" in rob_val.lower()
-    add_check("Critical <head>", "Robots & Noindex Check",
-              "FAIL" if has_noindex else ("PASS" if "index" in rob_val.lower() else "WARN"),
-              rob_val or "Not set (defaults to index, follow)",
-              "WARNING: noindex detected!" if has_noindex else "Ensure index, follow on live pages")
+    rob_summary = f"robots: {rob_val or 'Missing'} | googlebot: {gbot_val or 'Missing'} | bingbot: {bbot_val or 'Missing'}"
+    add_check("Critical <head>", "Robots, Googlebot & Bingbot Tags",
+              "FAIL" if has_noindex else ("PASS" if (rob_val and gbot_val and bbot_val) else "WARN"),
+              rob_summary,
+              "WARNING: noindex detected!" if has_noindex else "Ensure robots, googlebot, and bingbot are set to index, follow")
 
     # --- 3. SOCIAL, SCHEMA & TRACKING ---
-    og_required = ["og:title", "og:locale", "og:url", "og:type", "og:description", "og:image"]
+    og_required = ["og:title", "og:locale", "og:url", "og:type", "og:description", "og:image", "og:logo"]
     og_found = {}
     for prop in og_required:
         t = soup.find("meta", property=prop)
         if t and t.get("content"):
             og_found[prop] = t["content"].strip()
     og_missing = [p for p in og_required if p not in og_found]
+    og_data_str = " | ".join(f"{k}={v}" for k, v in og_found.items()) or "None found"
     add_check("Social & Schema", "OpenGraph (OG) Tags",
               "PASS" if not og_missing else ("WARN" if og_found else "FAIL"),
-              f"{len(og_found)}/{len(og_required)} present",
-              f"Missing: {', '.join(og_missing)}" if og_missing else "All core OG tags present")
+              f"{len(og_found)}/{len(og_required)} | {og_data_str}",
+              f"Missing: {', '.join(og_missing)}" if og_missing else "All 7 required OG tags present")
 
-    tw_required = ["twitter:card", "twitter:title", "twitter:description", "twitter:image"]
+    tw_required = ["twitter:card", "twitter:site", "twitter:title", "twitter:description", "twitter:image", "twitter:image:alt"]
     tw_found = {}
     for name in tw_required:
         t = soup.find("meta", attrs={"name": name})
         if t and t.get("content"):
             tw_found[name] = t["content"].strip()
     tw_missing = [n for n in tw_required if n not in tw_found]
+    tw_data_str = " | ".join(f"{k}={v}" for k, v in tw_found.items()) or "None found"
     add_check("Social & Schema", "Twitter Card Tags",
               "PASS" if not tw_missing else ("WARN" if tw_found else "FAIL"),
-              f"{len(tw_found)}/{len(tw_required)} present",
-              f"Missing: {', '.join(tw_missing)}" if tw_missing else "All core Twitter tags present")
+              f"{len(tw_found)}/{len(tw_required)} | {tw_data_str}",
+              f"Missing: {', '.join(tw_missing)}" if tw_missing else "All 6 required Twitter tags present")
 
     # Schemas (JSON-LD)
     schema_scripts = soup.find_all("script", type="application/ld+json")
@@ -1300,8 +1307,12 @@ def api_full_checklist_audit():
               apple_title.get("content", "") if apple_title else "Missing", "Recommended for iOS home screen")
 
     apple_icons = soup.find_all("link", rel=lambda r: r and "apple-touch-icon" in r)
-    add_check("Icons & UI", "Apple Touch Icons", "PASS" if len(apple_icons) >= 4 else ("WARN" if apple_icons else "FAIL"),
-              f"{len(apple_icons)} size(s) defined", "Recommended sizes: 57x57 up to 180x180")
+    req_sizes = {"57x57", "72x72", "76x76", "114x114", "120x120", "144x144", "152x152", "180x180"}
+    found_sizes = {ic.get("sizes", "").lower() for ic in apple_icons if ic.get("sizes")}
+    missing_sizes = sorted(req_sizes - found_sizes)
+    add_check("Icons & UI", "Apple Touch Icons", "PASS" if not missing_sizes else ("WARN" if apple_icons else "FAIL"),
+              f"Found ({len(apple_icons)}): {', '.join(sorted(found_sizes)) or 'None'}",
+              f"Missing sizes: {', '.join(missing_sizes)}" if missing_sizes else "All 8 Apple touch icon sizes defined")
 
     theme_color = soup.find("meta", attrs={"name": "theme-color"})
     tc_val = theme_color.get("content", "") if theme_color else ""
@@ -1311,29 +1322,60 @@ def api_full_checklist_audit():
     # Headings
     h1s = [h.get_text(strip=True) for h in soup.find_all("h1")]
     h2s = [h.get_text(strip=True) for h in soup.find_all("h2")]
-    links_in_headings = any(h.find("a") for h in soup.find_all(["h1", "h2", "h3", "h4"]))
+    links_in_headings = [h.get_text(strip=True) for h in soup.find_all(["h1", "h2", "h3", "h4"]) if h.find("a")]
     add_check("Content & Media", "H1 & Heading Hierarchy",
               "PASS" if len(h1s) == 1 and not links_in_headings else "WARN",
-              f"{len(h1s)} H1(s), {len(h2s)} H2(s)",
-              "Links found inside headings!" if links_in_headings else ("Must have exactly 1 H1" if len(h1s) != 1 else "Clean heading structure"))
+              f"H1 ({len(h1s)}): {', '.join(h1s) or 'None'} | H2 ({len(h2s)})",
+              f"Links inside headings: {', '.join(links_in_headings)}" if links_in_headings else ("Must have exactly 1 H1" if len(h1s) != 1 else "Clean heading structure (no links in headings)"))
 
-    # Images summary
+    # Images (4 separate checks with actual image URLs for manual verification)
     imgs = soup.find_all("img")
-    miss_alt = sum(1 for i in imgs if not (i.get("alt") or "").strip())
-    miss_dim = sum(1 for i in imgs if not i.get("width") or not i.get("height"))
-    bad_fmt = sum(1 for i in imgs if urlparse(i.get("src", "")).path.lower().endswith((".png", ".jpg", ".jpeg")))
-    add_check("Content & Media", "Images (Alt, Size, WebP)",
-              "PASS" if (miss_alt == 0 and miss_dim == 0 and bad_fmt == 0) else "WARN",
-              f"Total: {len(imgs)} | Missing Alt: {miss_alt} | Missing WxH: {miss_dim} | PNG/JPG: {bad_fmt}",
-              "Use WebP/SVG, explicit width/height, and descriptive alt text")
+    miss_alt_imgs = [i.get("src", "[no-src]") for i in imgs if not (i.get("alt") or "").strip()]
+    miss_dim_imgs = [i.get("src", "[no-src]") for i in imgs if not i.get("width") or not i.get("height")]
+    eager_imgs = [i.get("src", "[no-src]") for i in imgs if (i.get("loading") or "eager").lower() == "eager"]
+    bad_fmt_imgs = [i.get("src", "[no-src]") for i in imgs if urlparse(i.get("src", "")).path.lower().endswith((".png", ".jpg", ".jpeg"))]
 
-    # Anchors summary
+    add_check("Content & Media", "Image Alts & Title",
+              "PASS" if len(miss_alt_imgs) == 0 else "FAIL",
+              f"{len(imgs) - len(miss_alt_imgs)}/{len(imgs)} have alt | Missing: {', '.join(miss_alt_imgs[:8]) or 'None'}",
+              "Every image must have a descriptive alt attribute")
+
+    add_check("Content & Media", "Image Loading (lazy/eager)",
+              "PASS" if len(eager_imgs) <= 2 else "WARN",
+              f"Eager: {len(eager_imgs)} | Lazy: {len(imgs) - len(eager_imgs)} | Eager URLs: {', '.join(eager_imgs[:5]) or 'None'}",
+              "Use eager ONLY for above-the-fold images; rest must be loading='lazy'")
+
+    add_check("Content & Media", "Explicit Image Size (width/height)",
+              "PASS" if len(miss_dim_imgs) == 0 else "FAIL",
+              f"{len(imgs) - len(miss_dim_imgs)}/{len(imgs)} have WxH | Missing: {', '.join(miss_dim_imgs[:8]) or 'None'}",
+              "Every image must have explicit width and height for page speed (CLS)")
+
+    add_check("Content & Media", "Image Format (WEBP/SVG/GIF only)",
+              "PASS" if len(bad_fmt_imgs) == 0 else "FAIL",
+              f"PNG/JPG found: {len(bad_fmt_imgs)} | Files: {', '.join(bad_fmt_imgs[:8]) or 'All WebP/SVG/GIF'}",
+              "PNG and JPG are not permissible; convert to WEBP, SVG, or GIF")
+
+    # Anchors (separate check with actual failing anchor details)
     anchors = soup.find_all("a", href=True)
-    miss_a_title = sum(1 for a in anchors if not (a.get("title") or "").strip())
-    add_check("Content & Media", "Anchor Title Attributes",
-              "PASS" if miss_a_title == 0 else "WARN",
-              f"Total: {len(anchors)} | Missing Title: {miss_a_title}",
-              "Every anchor should have a descriptive title != anchor text")
+    miss_a_list = []
+    dup_a_list = []
+    for a in anchors:
+        a_href = a.get("href", "")
+        a_text = a.get_text(strip=True)
+        a_title = (a.get("title") or "").strip()
+        if not a_title:
+            miss_a_list.append(f"{a_text[:25] or a_href[:30]}")
+        elif a_title.lower() == a_text.lower():
+            dup_a_list.append(f"{a_text[:25]} (title==text)")
+
+    add_check("Content & Media", "Anchor Texts & Title Attribute",
+              "PASS" if (not miss_a_list and not dup_a_list) else "WARN",
+              f"Total: {len(anchors)} | Missing title ({len(miss_a_list)}): {', '.join(miss_a_list[:6]) or 'None'} | Duplicate ({len(dup_a_list)}): {', '.join(dup_a_list[:4]) or 'None'}",
+              "Every anchor must have a descriptive title attribute that is NOT identical to the anchor text")
+
+    miss_alt = len(miss_alt_imgs)
+    miss_dim = len(miss_dim_imgs)
+    miss_a_title = len(miss_a_list)
 
     passed = sum(1 for c in checks if c["status"] == "PASS")
     warned = sum(1 for c in checks if c["status"] == "WARN")
