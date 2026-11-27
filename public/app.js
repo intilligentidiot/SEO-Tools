@@ -719,11 +719,11 @@ function renderChecklistTable(filter = "ALL") {
         const tr = document.createElement("tr");
         tr.innerHTML = `
             <td>${idx + 1}</td>
-            <td style="font-weight:600; color:var(--brand-cobalt);">${escapeHtml(chk.category)}</td>
-            <td style="font-weight:600;">${escapeHtml(chk.particular)}</td>
+            <td style="font-weight:600; color:var(--brand-cobalt); white-space:normal;">${escapeHtml(chk.category)}</td>
+            <td style="font-weight:600; white-space:normal;">${escapeHtml(chk.particular)}</td>
             <td><span class="pill ${pillClass}">${chk.status}</span></td>
-            <td style="max-width:260px;" title="${escapeHtml(chk.value)}">${escapeHtml(chk.value)}</td>
-            <td style="max-width:280px; color:var(--text-muted);" title="${escapeHtml(chk.remark)}">${escapeHtml(chk.remark)}</td>
+            <td style="max-width:420px; white-space:normal; word-break:break-word; line-height:1.45;">${escapeHtml(chk.value)}</td>
+            <td style="max-width:300px; white-space:normal; word-break:break-word; color:var(--text-muted); line-height:1.45;">${escapeHtml(chk.remark)}</td>
         `;
         tbody.appendChild(tr);
     });

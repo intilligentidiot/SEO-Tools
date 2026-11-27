@@ -1404,11 +1404,13 @@ def api_full_checklist_audit():
             cell.font = header_font
             cell.border = border
 
+        wrap_align = Alignment(vertical="top", wrap_text=True)
         for r_idx, chk in enumerate(checks, 2):
             vals = [r_idx - 1, chk["category"], chk["particular"], chk["status"], chk["value"], chk["remark"]]
             for c_idx, v in enumerate(vals, 1):
                 cell = ws1.cell(row=r_idx, column=c_idx, value=v)
                 cell.border = border
+                cell.alignment = wrap_align
                 if c_idx == 4:
                     cell.fill = pass_fill if v == "PASS" else (warn_fill if v == "WARN" else fail_fill)
 
