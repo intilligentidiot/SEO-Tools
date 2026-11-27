@@ -42,6 +42,7 @@
                 <button class="tab-btn" data-tab="schema">📄 Schema Generator</button>
                 <button class="tab-btn" data-tab="shorts">🔥 Shorts Hunter</button>
                 <button class="tab-btn" data-tab="video">🎬 Video Downloader</button>
+                <button class="tab-btn" data-tab="checklist">✅ Full Checklist</button>
             </div>
         </nav>
 
@@ -467,6 +468,76 @@
                             <div id="video-formats-list" class="button-group" style="margin-top: 6px;"></div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- 8. TAB: FULL ON-PAGE & TECHNICAL CHECKLIST -->
+        <!-- ======================================================== -->
+        <section id="panel-checklist" class="tool-panel hidden">
+            <div class="tool-header">
+                <div class="badge-discipline">Automated 24+ Point SEO &amp; Technical Verification</div>
+                <h1>Full <span>SEO Checklist</span> Auditor</h1>
+                <p class="tool-subtitle">// Pre-update Old Data collection &amp; Post-launch live site verification in one click</p>
+            </div>
+
+            <div class="card">
+                <div class="meta-label">Website URL to Audit</div>
+                <div class="input-row">
+                    <input type="text" id="checklist-url-input" placeholder="https://www.teslamechanicaldesigns.com" style="flex: 1;" />
+                    <button id="checklist-run-btn" class="btn primary">✅ Run Full Checklist</button>
+                </div>
+                <div id="checklist-status" class="status-text hidden"></div>
+            </div>
+
+            <div id="checklist-results-container" class="hidden">
+                <div class="stat-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Checklist Score</div>
+                        <div id="checklist-score" class="stat-value ok">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Passed</div>
+                        <div id="checklist-passed" class="stat-value ok">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Warnings</div>
+                        <div id="checklist-warned" class="stat-value warn">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Failed</div>
+                        <div id="checklist-failed" class="stat-value bad">0</div>
+                    </div>
+                </div>
+
+                <div class="results-header">
+                    <div class="button-group" id="checklist-filters">
+                        <button class="btn secondary checklist-filter-btn" data-filter="ALL" style="border-color:var(--brand-cobalt); color:var(--brand-cobalt);">All</button>
+                        <button class="btn secondary checklist-filter-btn" data-filter="FAIL">❌ Failed</button>
+                        <button class="btn secondary checklist-filter-btn" data-filter="WARN">⚠️ Warnings</button>
+                        <button class="btn secondary checklist-filter-btn" data-filter="PASS">✅ Passed</button>
+                    </div>
+                    <div class="button-group">
+                        <a id="checklist-pagespeed-link" href="https://pagespeed.web.dev/" target="_blank" class="btn secondary">⚡ PageSpeed.web.dev ↗</a>
+                        <button id="checklist-export-btn" class="btn download">↓ Export Checklist &amp; Old Data (.xlsx)</button>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Category</th>
+                                <th>Particular</th>
+                                <th>Status</th>
+                                <th>Detected Value</th>
+                                <th>Remark</th>
+                            </tr>
+                        </thead>
+                        <tbody id="checklist-table-body"></tbody>
+                    </table>
                 </div>
             </div>
         </section>

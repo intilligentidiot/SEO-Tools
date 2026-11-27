@@ -1066,6 +1066,366 @@ def api_video_downloader():
         return jsonify({"error": f"Failed to extract video: {str(e)}"}), 500
 
 
+# -------------------------------------------------------------
+# 8. TOOL: FULL ON-PAGE & TECHNICAL CHECKLIST AUDITOR
+# -------------------------------------------------------------
+@app.route("/api/full-checklist-audit", methods=["POST"])
+def api_full_checklist_audit():
+    data = request.get_json(silent=True) or {}
+    action = data.get("action", "audit")
+    url = data.get("url", "").strip()
+
+    if not url:
+        return jsonify({"error": "URL is required"}), 400
+    if not url.startswith("http://") and not url.startswith("https://"):
+        url = "https://" + url
+
+    parsed = urlparse(url)
+    root_domain = parsed.netloc.replace("www.", "")
+    base_https_www = f"https://www.{root_domain}"
+    base_origin = f"{parsed.scheme}://{parsed.netloc}"
+
+    checks = []
+    def add_check(cat, particular, status, value, remark):
+        checks.append({
+            "category": cat,
+            "particular": particular,
+            "status": status,  # PASS, WARN, FAIL
+            "value": str(value)[:250],
+            "remark": remark
+        })
+
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=10, allow_redirects=True)
+        raw_html = resp.text
+        soup = BeautifulSoup(raw_html, "html.parser")
+    except Exception as e:
+        return jsonify({"error": f"Could not fetch URL: {str(e)}"}), 500
+
+    # --- 1. SITE-LEVEL CHECKS ---
+    # Domain Redirect Check
+    variants = [
+        f"http://{root_domain}",
+        f"https://{root_domain}",
+        f"http://www.{root_domain}",
+        f"https://www.{root_domain}"
+    ]
+    redirect_ok = True
+    redirect_notes = []
+    for v in variants:
+        try:
+            r_v = requests.head(v, headers=HEADERS, timeout=4, allow_redirects=True)
+            final_u = r_v.url.rstrip("/")
+            if not final_u.startswith("https://www."):
+                redirect_ok = False
+            redirect_notes.append(f"{v} -> {final_u}")
+        except Exception:
+            redirect_ok = False
+            redirect_notes.append(f"{v} -> Error")
+    add_check(
+        "Site-Level", "Domain Redirect Check",
+        "PASS" if redirect_ok else "WARN",
+        " | ".join(redirect_notes[:2]) + "...",
+        "All variants should 301 redirect to https://www." if not redirect_ok else "All variants resolve cleanly to https://www."
+    )
+
+    # robots.txt
+    try:
+        r_rob = requests.get(f"{base_origin}/robots.txt", headers=HEADERS, timeout=5)
+        if r_rob.status_code == 200:
+            has_sm = "sitemap:" in r_rob.text.lower()
+            add_check("Site-Level", "robots.txt", "PASS" if has_sm else "WARN",
+                      "Found (200 OK)", "Sitemap declared in robots.txt" if has_sm else "robots.txt found, but Sitemap: line is missing")
+        else:
+            add_check("Site-Level", "robots.txt", "FAIL", f"HTTP {r_rob.status_code}", "robots.txt not found")
+    except Exception:
+        add_check("Site-Level", "robots.txt", "FAIL", "Error", "Could not fetch robots.txt")
+
+    # sitemap.xml
+    try:
+        r_sm = requests.get(f"{base_origin}/sitemap.xml", headers=HEADERS, timeout=5)
+        if r_sm.status_code == 200 and "<urlset" in r_sm.text or "<sitemapindex" in r_sm.text:
+            lastmods = re.findall(r"<lastmod>(.*?)</lastmod>", r_sm.text)
+            latest = lastmods[0] if lastmods else "No <lastmod> tag"
+            add_check("Site-Level", "sitemap.xml", "PASS" if lastmods else "WARN",
+                      f"Found | Latest: {latest}", "Verify timestamps (YYYY-MM-DDTHH:MM:SSZ) & update every 45 days")
+        else:
+            add_check("Site-Level", "sitemap.xml", "FAIL", f"HTTP {r_sm.status_code}", "sitemap.xml missing or invalid")
+    except Exception:
+        add_check("Site-Level", "sitemap.xml", "FAIL", "Error", "Could not fetch sitemap.xml")
+
+    # 404 Implementation
+    try:
+        r_404 = requests.get(f"{base_origin}/nonexistent-404-check-xyz", headers=HEADERS, timeout=5)
+        add_check("Site-Level", "404 Implementation",
+                  "PASS" if r_404.status_code == 404 else "FAIL",
+                  f"HTTP {r_404.status_code}",
+                  "Proper 404 status code returned" if r_404.status_code == 404 else "Soft-404 detected! Must return HTTP 404")
+    except Exception:
+        add_check("Site-Level", "404 Implementation", "WARN", "Error", "Could not test 404 page")
+
+    # --- 2. CRITICAL HTML & <HEAD> TAGS ---
+    # Doctype
+    has_doctype = raw_html.lstrip().lower().startswith("<!doctype html>")
+    add_check("Critical <head>", "HTML Doctype", "PASS" if has_doctype else "FAIL",
+              "<!doctype html>" if has_doctype else "Missing", "<!doctype html> must be defined")
+
+    # HTML Lang
+    html_tag = soup.find("html")
+    lang_val = html_tag.get("lang", "").strip() if html_tag else ""
+    valid_langs = {"en", "en-us", "en-au", "en-in"}
+    add_check("Critical <head>", "HTML Lang Tag",
+              "PASS" if lang_val.lower() in valid_langs else ("WARN" if lang_val else "FAIL"),
+              lang_val or "Missing", "Permissible: en, en-US, en-AU, en-IN")
+
+    # Charset
+    charset_tag = soup.find("meta", charset=True) or soup.find("meta", attrs={"http-equiv": re.compile("content-type", re.I)})
+    charset_val = charset_tag.get("charset", "") if charset_tag and charset_tag.get("charset") else ("utf-8" if charset_tag and "utf-8" in str(charset_tag).lower() else "")
+    add_check("Critical <head>", "Charset (UTF-8)", "PASS" if charset_val.lower() == "utf-8" else "FAIL",
+              charset_val or "Missing", "Only UTF-8 is permissible")
+
+    # Preconnect & DNS-Prefetch
+    preconnects = soup.find_all("link", rel=lambda r: r and ("preconnect" in r or "dns-prefetch" in r))
+    add_check("Critical <head>", "DNS-Prefetch & Preconnect", "PASS" if preconnects else "WARN",
+              f"{len(preconnects)} found", "Recommended for faster external font/CDN loading")
+
+    # Preload
+    preloads = soup.find_all("link", rel=lambda r: r and "preload" in r)
+    add_check("Critical <head>", "Viewport Image Preload", "PASS" if preloads else "WARN",
+              f"{len(preloads)} found", "Preload largest above-the-fold image for better LCP")
+
+    # Viewport
+    vp = soup.find("meta", attrs={"name": re.compile("^viewport$", re.I)})
+    vp_content = vp.get("content", "") if vp else ""
+    add_check("Critical <head>", "Viewport Tag", "PASS" if "width=device-width" in vp_content else "FAIL",
+              vp_content or "Missing", "Required for mobile responsiveness")
+
+    # Canonical & Hreflang
+    canon = soup.find("link", attrs={"rel": re.compile("^canonical$", re.I)})
+    canon_href = canon.get("href", "").strip() if canon else ""
+    hreflangs = [h.get("hreflang", "").lower() for h in soup.find_all("link", attrs={"rel": "alternate", "hreflang": True})]
+    add_check("Critical <head>", "Canonical Tag", "PASS" if canon_href else "FAIL",
+              canon_href or "Missing", "Canonical URL must be defined")
+    add_check("Critical <head>", "Hreflang Tags",
+              "PASS" if "x-default" in hreflangs else ("WARN" if hreflangs else "WARN"),
+              ", ".join(hreflangs) if hreflangs else "None", "Set x-default, en-us, en-au, en-ca, en-gb if multi-regional")
+
+    # Meta Keywords
+    kw_tag = soup.find("meta", attrs={"name": re.compile("^keywords$", re.I)})
+    kw_val = kw_tag.get("content", "").strip() if kw_tag else ""
+    add_check("Critical <head>", "Meta Keywords (Bing)", "PASS" if kw_val else "WARN",
+              kw_val[:120] if kw_val else "Missing", "Important for Bing SEO")
+
+    # Title & Description
+    title_tag = soup.find("title")
+    title_val = title_tag.get_text(strip=True) if title_tag else ""
+    t_len = len(title_val)
+    add_check("Critical <head>", "Meta Title",
+              "PASS" if 50 <= t_len <= 75 else ("WARN" if t_len > 0 else "FAIL"),
+              f"({t_len} chars) {title_val}", "Target: 60–75 characters")
+
+    desc_tag = soup.find("meta", attrs={"name": re.compile("^description$", re.I)})
+    desc_val = desc_tag.get("content", "").strip() if desc_tag else ""
+    d_len = len(desc_val)
+    add_check("Critical <head>", "Meta Description",
+              "PASS" if 120 <= d_len <= 165 else ("WARN" if d_len > 0 else "FAIL"),
+              f"({d_len} chars) {desc_val}", "Target: 140–160 characters")
+
+    # Robots / Googlebot / Bingbot / Noindex
+    rob_tag = soup.find("meta", attrs={"name": re.compile("^robots$", re.I)})
+    rob_val = rob_tag.get("content", "").strip() if rob_tag else ""
+    has_noindex = "noindex" in rob_val.lower()
+    add_check("Critical <head>", "Robots & Noindex Check",
+              "FAIL" if has_noindex else ("PASS" if "index" in rob_val.lower() else "WARN"),
+              rob_val or "Not set (defaults to index, follow)",
+              "WARNING: noindex detected!" if has_noindex else "Ensure index, follow on live pages")
+
+    # --- 3. SOCIAL, SCHEMA & TRACKING ---
+    og_required = ["og:title", "og:locale", "og:url", "og:type", "og:description", "og:image"]
+    og_found = {}
+    for prop in og_required:
+        t = soup.find("meta", property=prop)
+        if t and t.get("content"):
+            og_found[prop] = t["content"].strip()
+    og_missing = [p for p in og_required if p not in og_found]
+    add_check("Social & Schema", "OpenGraph (OG) Tags",
+              "PASS" if not og_missing else ("WARN" if og_found else "FAIL"),
+              f"{len(og_found)}/{len(og_required)} present",
+              f"Missing: {', '.join(og_missing)}" if og_missing else "All core OG tags present")
+
+    tw_required = ["twitter:card", "twitter:title", "twitter:description", "twitter:image"]
+    tw_found = {}
+    for name in tw_required:
+        t = soup.find("meta", attrs={"name": name})
+        if t and t.get("content"):
+            tw_found[name] = t["content"].strip()
+    tw_missing = [n for n in tw_required if n not in tw_found]
+    add_check("Social & Schema", "Twitter Card Tags",
+              "PASS" if not tw_missing else ("WARN" if tw_found else "FAIL"),
+              f"{len(tw_found)}/{len(tw_required)} present",
+              f"Missing: {', '.join(tw_missing)}" if tw_missing else "All core Twitter tags present")
+
+    # Schemas (JSON-LD)
+    schema_scripts = soup.find_all("script", type="application/ld+json")
+    schema_types = []
+    for sc in schema_scripts:
+        try:
+            obj = json.loads(sc.string or "{}")
+            if isinstance(obj, dict) and "@type" in obj:
+                schema_types.append(str(obj["@type"]))
+            elif isinstance(obj, list):
+                for item in obj:
+                    if isinstance(item, dict) and "@type" in item:
+                        schema_types.append(str(item["@type"]))
+        except Exception:
+            pass
+    add_check("Social & Schema", "JSON-LD Schemas", "PASS" if schema_types else "WARN",
+              ", ".join(schema_types) if schema_types else "None detected",
+              "Verify Organization, WebSite, Service, BreadcrumbList, Article schemas")
+
+    # Google Tag Manager
+    gtm_match = re.findall(r"GTM-[A-Z0-9]+", raw_html)
+    gtm_ids = list(set(gtm_match))
+    add_check("Social & Schema", "Google Tag Manager (GTM)", "PASS" if gtm_ids else "WARN",
+              ", ".join(gtm_ids) if gtm_ids else "Not detected", "Verify GTM container ID")
+
+    # --- 4. ICONS, HEADINGS, IMAGES & ANCHORS ---
+    favicon = soup.find("link", rel=lambda r: r and "icon" in r)
+    fav_href = favicon.get("href", "") if favicon else ""
+    add_check("Icons & UI", "Favicon (.ico)", "PASS" if ".ico" in fav_href.lower() else ("WARN" if fav_href else "FAIL"),
+              fav_href or "Missing", "Preferred format is .ico")
+
+    apple_title = soup.find("meta", attrs={"name": "apple-mobile-web-app-title"})
+    add_check("Icons & UI", "Apple WebView Title", "PASS" if apple_title and apple_title.get("content") else "WARN",
+              apple_title.get("content", "") if apple_title else "Missing", "Recommended for iOS home screen")
+
+    apple_icons = soup.find_all("link", rel=lambda r: r and "apple-touch-icon" in r)
+    add_check("Icons & UI", "Apple Touch Icons", "PASS" if len(apple_icons) >= 4 else ("WARN" if apple_icons else "FAIL"),
+              f"{len(apple_icons)} size(s) defined", "Recommended sizes: 57x57 up to 180x180")
+
+    theme_color = soup.find("meta", attrs={"name": "theme-color"})
+    tc_val = theme_color.get("content", "") if theme_color else ""
+    add_check("Icons & UI", "Theme Color", "PASS" if tc_val else "WARN",
+              tc_val or "Missing", "Should match primary brand hex color")
+
+    # Headings
+    h1s = [h.get_text(strip=True) for h in soup.find_all("h1")]
+    h2s = [h.get_text(strip=True) for h in soup.find_all("h2")]
+    links_in_headings = any(h.find("a") for h in soup.find_all(["h1", "h2", "h3", "h4"]))
+    add_check("Content & Media", "H1 & Heading Hierarchy",
+              "PASS" if len(h1s) == 1 and not links_in_headings else "WARN",
+              f"{len(h1s)} H1(s), {len(h2s)} H2(s)",
+              "Links found inside headings!" if links_in_headings else ("Must have exactly 1 H1" if len(h1s) != 1 else "Clean heading structure"))
+
+    # Images summary
+    imgs = soup.find_all("img")
+    miss_alt = sum(1 for i in imgs if not (i.get("alt") or "").strip())
+    miss_dim = sum(1 for i in imgs if not i.get("width") or not i.get("height"))
+    bad_fmt = sum(1 for i in imgs if urlparse(i.get("src", "")).path.lower().endswith((".png", ".jpg", ".jpeg")))
+    add_check("Content & Media", "Images (Alt, Size, WebP)",
+              "PASS" if (miss_alt == 0 and miss_dim == 0 and bad_fmt == 0) else "WARN",
+              f"Total: {len(imgs)} | Missing Alt: {miss_alt} | Missing WxH: {miss_dim} | PNG/JPG: {bad_fmt}",
+              "Use WebP/SVG, explicit width/height, and descriptive alt text")
+
+    # Anchors summary
+    anchors = soup.find_all("a", href=True)
+    miss_a_title = sum(1 for a in anchors if not (a.get("title") or "").strip())
+    add_check("Content & Media", "Anchor Title Attributes",
+              "PASS" if miss_a_title == 0 else "WARN",
+              f"Total: {len(anchors)} | Missing Title: {miss_a_title}",
+              "Every anchor should have a descriptive title != anchor text")
+
+    passed = sum(1 for c in checks if c["status"] == "PASS")
+    warned = sum(1 for c in checks if c["status"] == "WARN")
+    failed = sum(1 for c in checks if c["status"] == "FAIL")
+    score = int((passed + warned * 0.5) / len(checks) * 100) if checks else 0
+
+    if action == "export_excel":
+        wb = openpyxl.Workbook()
+        header_fill = PatternFill(start_color="223043", end_color="223043", fill_type="solid")
+        header_font = Font(name="Arial", bold=True, color="FFFFFF", size=11)
+        pass_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+        warn_fill = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid")
+        fail_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+        border = Border(left=Side(style='thin', color="CCCCCC"),
+                        right=Side(style='thin', color="CCCCCC"),
+                        top=Side(style='thin', color="CCCCCC"),
+                        bottom=Side(style='thin', color="CCCCCC"))
+
+        # Sheet 1: Checklist Verification
+        ws1 = wb.active
+        ws1.title = "SEO Checklist Audit"
+        h1_cols = ["Sr. #", "Category", "Particular", "Status", "Detected Value", "Remark"]
+        for c_idx, text in enumerate(h1_cols, 1):
+            cell = ws1.cell(row=1, column=c_idx, value=text)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.border = border
+
+        for r_idx, chk in enumerate(checks, 2):
+            vals = [r_idx - 1, chk["category"], chk["particular"], chk["status"], chk["value"], chk["remark"]]
+            for c_idx, v in enumerate(vals, 1):
+                cell = ws1.cell(row=r_idx, column=c_idx, value=v)
+                cell.border = border
+                if c_idx == 4:
+                    cell.fill = pass_fill if v == "PASS" else (warn_fill if v == "WARN" else fail_fill)
+
+        # Sheet 2: Collected Site Data (Old/Current Data)
+        ws2 = wb.create_sheet("Collected Site Data")
+        data_rows = [
+            ("Audited URL", url),
+            ("Audit Timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+            ("Overall Checklist Score", f"{score}%"),
+            ("Meta Title", title_val),
+            ("Title Length", t_len),
+            ("Meta Description", desc_val),
+            ("Description Length", d_len),
+            ("Meta Keywords", kw_val),
+            ("Canonical URL", canon_href),
+            ("Hreflang Tags", ", ".join(hreflangs)),
+            ("Robots Tag", rob_val),
+            ("Schemas Detected", ", ".join(schema_types)),
+            ("GTM IDs", ", ".join(gtm_ids)),
+            ("Theme Color", tc_val),
+            ("H1 Tags", " | ".join(h1s)),
+            ("H2 Tags (Top 5)", " | ".join(h2s[:5])),
+            ("Total Images", len(imgs)),
+            ("Images Missing Alt", miss_alt),
+            ("Images Missing Dimensions", miss_dim),
+            ("Total Links", len(anchors)),
+            ("Links Missing Title", miss_a_title),
+        ]
+        ws2.cell(row=1, column=1, value="Field").fill = header_fill
+        ws2.cell(row=1, column=1).font = header_font
+        ws2.cell(row=1, column=2, value="Extracted Value").fill = header_fill
+        ws2.cell(row=1, column=2).font = header_font
+        for r_idx, (k, v) in enumerate(data_rows, 2):
+            ws2.cell(row=r_idx, column=1, value=k).border = border
+            ws2.cell(row=r_idx, column=2, value=str(v)).border = border
+
+        for ws in [ws1, ws2]:
+            for col in ws.columns:
+                max_len = max(len(str(cell.value or "")) for cell in col)
+                ws.column_dimensions[get_column_letter(col[0].column)].width = min(max_len + 4, 60)
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return send_file(
+            buf,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name="full_seo_checklist_report.xlsx"
+        )
+
+    return jsonify({
+        "url": url,
+        "score": score,
+        "summary": {"total": len(checks), "passed": passed, "warned": warned, "failed": failed},
+        "checks": checks
+    })
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
 

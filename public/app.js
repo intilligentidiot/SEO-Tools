@@ -698,3 +698,112 @@ document.getElementById("video-fetch-btn")?.addEventListener("click", async () =
     }
 });
 
+
+// ========================================================
+// 8. TOOL: FULL ON-PAGE & TECHNICAL CHECKLIST AUDITOR
+// ========================================================
+let currentChecklistChecks = [];
+let currentChecklistUrl = "";
+
+function renderChecklistTable(filter = "ALL") {
+    const tbody = document.getElementById("checklist-table-body");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+
+    const filtered = filter === "ALL"
+        ? currentChecklistChecks
+        : currentChecklistChecks.filter(c => c.status === filter);
+
+    filtered.forEach((chk, idx) => {
+        const pillClass = chk.status === "PASS" ? "pill-ok" : (chk.status === "WARN" ? "pill-warn" : "pill-bad");
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${idx + 1}</td>
+            <td style="font-weight:600; color:var(--brand-cobalt);">${escapeHtml(chk.category)}</td>
+            <td style="font-weight:600;">${escapeHtml(chk.particular)}</td>
+            <td><span class="pill ${pillClass}">${chk.status}</span></td>
+            <td style="max-width:260px;" title="${escapeHtml(chk.value)}">${escapeHtml(chk.value)}</td>
+            <td style="max-width:280px; color:var(--text-muted);" title="${escapeHtml(chk.remark)}">${escapeHtml(chk.remark)}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+document.getElementById("checklist-run-btn")?.addEventListener("click", async () => {
+    const url = document.getElementById("checklist-url-input").value.trim();
+    if (!url) return alert("Please enter a website URL to audit.");
+
+    currentChecklistUrl = url;
+    const btn = document.getElementById("checklist-run-btn");
+    btn.disabled = true;
+    showStatus("checklist-status", "Running 24+ site-level & <head> checks... Please wait.", true);
+    document.getElementById("checklist-results-container").classList.add("hidden");
+
+    try {
+        const resp = await fetch(`${API_BASE}/api/full-checklist-audit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "audit", url })
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        const data = await resp.json();
+
+        currentChecklistChecks = data.checks || [];
+        const scoreEl = document.getElementById("checklist-score");
+        scoreEl.textContent = `${data.score}%`;
+        scoreEl.className = `stat-value ${data.score >= 80 ? 'ok' : data.score >= 50 ? 'warn' : 'bad'}`;
+
+        document.getElementById("checklist-passed").textContent = data.summary.passed;
+        document.getElementById("checklist-warned").textContent = data.summary.warned;
+        document.getElementById("checklist-failed").textContent = data.summary.failed;
+
+        const psLink = document.getElementById("checklist-pagespeed-link");
+        if (psLink) {
+            psLink.href = `https://pagespeed.web.dev/analysis?url=${encodeURIComponent(data.url)}`;
+        }
+
+        renderChecklistTable("ALL");
+        document.getElementById("checklist-results-container").classList.remove("hidden");
+        hideStatus("checklist-status");
+    } catch (err) {
+        showStatus("checklist-status", `Error: ${err.message}`);
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+document.querySelectorAll(".checklist-filter-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+        document.querySelectorAll(".checklist-filter-btn").forEach(b => {
+            b.style.borderColor = "var(--border-color)";
+            b.style.color = "var(--text-navy)";
+        });
+        btn.style.borderColor = "var(--brand-cobalt)";
+        btn.style.color = "var(--brand-cobalt)";
+        renderChecklistTable(btn.getAttribute("data-filter"));
+    });
+});
+
+document.getElementById("checklist-export-btn")?.addEventListener("click", async () => {
+    if (!currentChecklistUrl) return alert("Please run the checklist first.");
+    const btn = document.getElementById("checklist-export-btn");
+    btn.disabled = true;
+    btn.textContent = "Generating Excel...";
+
+    try {
+        const resp = await fetch(`${API_BASE}/api/full-checklist-audit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "export_excel", url: currentChecklistUrl })
+        });
+        if (!resp.ok) throw new Error("Export failed");
+        const blob = await resp.blob();
+        downloadBlob(blob, `full_seo_checklist_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (err) {
+        alert("Failed to export Excel: " + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = "↓ Export Checklist & Old Data (.xlsx)";
+    }
+});
+
