@@ -286,7 +286,8 @@ let currentAuditedUrl = "";
 
 document.getElementById("audit-btn")?.addEventListener("click", async () => {
     const url = document.getElementById("audit-url-input").value.trim();
-    if (!url) return alert("Please enter a page URL to audit.");
+    const htmlContent = document.getElementById("audit-html-input")?.value.trim() || "";
+    if (!url && !htmlContent) return alert("Please enter a page URL or paste HTML code to audit.");
 
     currentAuditedUrl = url;
     const btn = document.getElementById("audit-btn");
@@ -298,7 +299,7 @@ document.getElementById("audit-btn")?.addEventListener("click", async () => {
         const resp = await fetch(`${API_BASE}/api/seo-audit`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "audit", url })
+            body: JSON.stringify({ action: "audit", url, html_content: htmlContent })
         });
         if (!resp.ok) throw new Error(await resp.text());
         const data = await resp.json();

@@ -429,15 +429,22 @@ def api_seo_audit():
     data = request.get_json(silent=True) or {}
     action = data.get("action", "audit")
     url = data.get("url", "").strip()
+    html_content = data.get("html_content", "").strip()
 
-    if not url:
-        return jsonify({"error": "URL is required"}), 400
-    if not url.startswith("http://") and not url.startswith("https://"):
+    if not url and not html_content:
+        return jsonify({"error": "URL or HTML content is required"}), 400
+    if url and not url.startswith("http://") and not url.startswith("https://"):
         url = "https://" + url
 
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=10)
-        soup = BeautifulSoup(resp.text, "html.parser")
+        if html_content:
+            raw_html = html_content
+            if not url:
+                url = "https://raw-html-input.local"
+        else:
+            resp = requests.get(url, headers=HEADERS, timeout=10)
+            raw_html = resp.text
+        soup = BeautifulSoup(raw_html, "html.parser")
 
         # Basic Head & Meta
         title_tag = soup.find("title")
